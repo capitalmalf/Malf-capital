@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CRM Simples</title>
+<title>CRM Malf Capital</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0078d4">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Arial,sans-serif;background:#f4f6f9;padding:20px}
@@ -149,6 +153,23 @@ td.acoes .perigo{margin-left:0}
 #login{margin:24px auto}
 .toast{bottom:100px}
 }
+
+/* ---- Painel, funil, extras ---- */
+.res.est{cursor:default}
+.item{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #eee;flex-wrap:wrap}
+.barras{display:flex;align-items:flex-end;gap:8px;height:150px}
+.bcol{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;font-size:11px;color:#374151;text-align:center}
+.bcol i{display:block;width:100%;background:#0078d4;border-radius:6px 6px 0 0;min-height:2px}
+.funil{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;align-items:flex-start;padding-bottom:10px}
+.col{flex:0 0 min(300px,85vw);background:#fff;border-radius:12px;padding:12px;scroll-snap-align:start;box-shadow:0 2px 10px rgba(0,0,0,.08);min-height:120px}
+.col h3{margin-bottom:4px}
+.kcard{background:#f9fafb;border-radius:8px;padding:10px;margin-top:8px;cursor:grab}
+.kcard a{color:#111;font-weight:bold;text-decoration:none}
+.kcard select{margin:8px 0 0}
+.wa{background:#f9fafb;border-radius:10px;padding:12px;margin-bottom:18px}
+.wa summary{cursor:pointer;font-weight:bold}
+.wa select,.wa textarea{margin:10px 0 0}
+.menu button{font-size:14px;padding:10px 6px}
 </style>
 </head>
 <body>
@@ -170,8 +191,10 @@ td.acoes .perigo{margin-left:0}
   </div>
 
   <div class="menu">
-    <button id="navClientes" class="ativo">Clientes</button>
-    <button id="navNovo">+ Novo Cliente</button>
+    <button id="navClientes" class="ativo" data-rota="clientes">Clientes</button>
+    <button id="navPainel" data-rota="painel">Painel</button>
+    <button id="navFunil" data-rota="funil">Funil</button>
+    <button id="navNovo">+ Novo</button>
   </div>
 
   <!-- PÁGINA: NOVO CLIENTE -->
@@ -283,6 +306,9 @@ td.acoes .perigo{margin-left:0}
         <option value="ultimo">Ordenar: Sem contato há mais tempo</option><option value="retorno">Ordenar: Retorno</option>
       </select>
       <button class="sec" onclick="exportarCSV()">Exportar CSV</button>
+      <button class="sec" onclick="exportarJSON()">Backup</button>
+      <button class="sec" onclick="document.getElementById('impCsv').click()">Importar CSV</button>
+      <input id="impCsv" type="file" accept=".csv" class="hidden" onchange="importarCSV(this)">
     </div>
     <div id="contagem" class="vazio"></div>
     <table>
@@ -301,6 +327,9 @@ td.acoes .perigo{margin-left:0}
   </div>
   </div>
 
+  <div id="paginaPainel" class="hidden"><div id="painelConteudo"></div></div>
+  <div id="paginaFunil" class="hidden"><div id="funilConteudo" class="funil"></div></div>
+
   <!-- PÁGINA: DETALHES DO CLIENTE -->
   <div id="paginaCliente" class="hidden">
     <div id="detalhesCliente" class="container"></div>
@@ -310,30 +339,56 @@ td.acoes .perigo{margin-left:0}
 <div id="toast" class="toast"></div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
-  arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-/* ===== 1) COLE AQUI A CONFIG DO SEU PROJETO (Console Firebase > Configurações > Seus apps) ===== */
-const firebaseConfig = {
-  apiKey: "AIzaSyAg22U5g9yIMchfUx3M6KwjCHmbE5Fjzus",
-  authDomain: "malf-capital.firebaseapp.com",
-  projectId: "malf-capital",
-  storageBucket: "malf-capital.firebasestorage.app",
-  messagingSenderId: "487992305267",
-  appId: "1:487992305267:web:5a11019533974c0276ec06",
-  measurementId: "G-0DG163YS2E"
-};
+/* ===== COLE AQUI OS DADOS DO SEU PROJETO (Supabase > Project Settings > API) ===== */
+const SUPABASE_URL = "https://apvqoqlbjubfuhxohtre.supabase.co";
+const SUPABASE_KEY = "sb_publishable_RzeLqlfrlUOQ72Aig_zH5w_dKuAEfnW";
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-const col = collection(db, "clientes");
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+const BUCKET = "documentos";
+let usuarioEmail = "";
+
+/* ----- Camada de dados: converte nomes (camelCase <-> snake_case) e mantém a lista local em dia ----- */
+const paraSnake = k => k.replace(/[A-Z]/g, m => "_" + m.toLowerCase());
+const paraCamel = k => k.replace(/_([a-z])/g, (_, l) => l.toUpperCase());
+const DATAS = ["nascimento", "proximo_contato", "situacao_receita_em"];
+const deRow = r => Object.fromEntries(Object.entries(r).map(([k, v]) => [paraCamel(k), v]));
+const paraRow = o => Object.fromEntries(Object.entries(o).map(([k, v]) => {
+  const n = paraSnake(k);
+  return [n, DATAS.includes(n) && v === "" ? null : v];
+}));
+const arrayUnion = (...itens) => ({ __uniao: itens });
+const arrayRemove = item => ({ __remover: item });
+const serverTimestamp = () => undefined;
+const ok = r => { if (r.error) throw new Error(r.error.message); return r.data; };
+
+function guardar(row) {
+  const n = deRow(row), i = clientes.findIndex(c => c.id === n.id);
+  if (i >= 0) clientes[i] = n; else clientes.push(n);
+  atualizarTelas();
+}
+async function criar(dados) {
+  const row = ok(await sb.from("clientes").insert(paraRow(dados)).select().single());
+  guardar(row);
+  return { id: row.id };
+}
+async function atualizar(id, patch) {
+  const simples = {}, chamadas = [];
+  for (const [k, v] of Object.entries(patch)) {
+    if (v && v.__uniao) v.__uniao.forEach(item => chamadas.push(["append_item", { p_id: id, p_campo: k, p_item: item }]));
+    else if (v && v.__remover) chamadas.push(["remover_documento", { p_id: id, p_path: v.__remover.path }]);
+    else if (v !== undefined) simples[k] = v;
+  }
+  if (Object.keys(simples).length) ok(await sb.from("clientes").update(paraRow(simples)).eq("id", id));
+  for (const [fn, args] of chamadas) ok(await sb.rpc(fn, args));
+  guardar(ok(await sb.from("clientes").select("*").eq("id", id).single()));
+}
+async function excluir(id) {
+  ok(await sb.from("clientes").delete().eq("id", id));
+  clientes = clientes.filter(c => c.id !== id);
+  atualizarTelas();
+}
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
@@ -357,23 +412,23 @@ let unsub = null;
 /* ===== Navegação entre páginas ===== */
 function rota() {
   const h = location.hash;
-  const novo = h === "#novo";
   const m = h.match(/^#cliente\/(.+)$/);
-  $("paginaNovo").classList.toggle("hidden", !novo);
-  $("paginaCliente").classList.toggle("hidden", !m);
-  $("paginaClientes").classList.toggle("hidden", novo || !!m);
-  $("navNovo").classList.toggle("ativo", novo);
-  $("navClientes").classList.toggle("ativo", !novo);
+  const pag = m ? "Cliente" : h === "#novo" ? "Novo" : h === "#painel" ? "Painel" : h === "#funil" ? "Funil" : "Clientes";
+  ["Novo", "Cliente", "Clientes", "Painel", "Funil"].forEach(n => $("pagina" + n).classList.toggle("hidden", n !== pag));
+  const nav = { Clientes: "navClientes", Cliente: "navClientes", Novo: "navNovo", Painel: "navPainel", Funil: "navFunil" }[pag];
+  document.querySelectorAll(".menu button").forEach(b => b.classList.toggle("ativo", b.id === nav));
   clienteAtualId = m ? m[1] : null;
   if (m) abrirCliente(clienteAtualId);
+  if (pag === "Painel") renderizarPainel();
+  if (pag === "Funil") renderizarFunil();
   window.scrollTo(0, 0);
-  if (novo && matchMedia("(pointer:fine)").matches) setTimeout(() => $("nome").focus(), 50);
+  if (pag === "Novo" && matchMedia("(pointer:fine)").matches) setTimeout(() => $("nome").focus(), 50);
 }
 window.addEventListener("hashchange", rota);
-$("navClientes").onclick = () => {
+document.querySelectorAll(".menu button[data-rota]").forEach(b => b.onclick = () => {
   if (location.hash === "#novo" && sujo) { if (!confirm("Descartar as alterações não salvas?")) return; limparForm(); }
-  location.hash = "clientes";
-};
+  location.hash = b.dataset.rota;
+});
 $("navNovo").onclick = () => {
   if (location.hash === "#novo" && sujo && !confirm("Descartar as alterações não salvas?")) return;
   limparForm(); location.hash = "novo";
@@ -382,28 +437,43 @@ $("navNovo").onclick = () => {
 /* ===== Autenticação ===== */
 $("btnEntrar").onclick = async () => {
   $("erroLogin").textContent = "";
-  try {
-    await signInWithEmailAndPassword(auth, $("loginEmail").value.trim(), $("loginSenha").value);
-  } catch (e) {
-    $("erroLogin").textContent = "E-mail ou senha incorretos.";
-  }
+  const r = await sb.auth.signInWithPassword({ email: $("loginEmail").value.trim(), password: $("loginSenha").value });
+  if (r.error) $("erroLogin").textContent = "E-mail ou senha incorretos.";
 };
 $("loginSenha").addEventListener("keydown", e => { if (e.key === "Enter") $("btnEntrar").click(); });
-$("btnSair").onclick = () => signOut(auth);
+$("btnSair").onclick = () => sb.auth.signOut();
 
-onAuthStateChanged(auth, user => {
+function atualizarTelas() {
+  renderizarClientes();
+  if (clienteAtualId) abrirCliente(clienteAtualId, true);
+  if (!$("paginaPainel").classList.contains("hidden")) renderizarPainel();
+  if (!$("paginaFunil").classList.contains("hidden")) renderizarFunil();
+}
+
+let canal = null, idAtual = null;
+async function carregar() {
+  const r = await sb.from("clientes").select("*");
+  if (r.error) { alert("Erro ao carregar clientes: " + r.error.message); return; }
+  clientes = r.data.map(deRow);
+  carregado = true;
+  atualizarTelas();
+  if (canal) sb.removeChannel(canal);
+  canal = sb.channel("clientes-rt")
+    .on("postgres_changes", { event: "*", schema: "public", table: "clientes" }, p => {
+      if (p.eventType === "DELETE") { clientes = clientes.filter(c => c.id !== p.old.id); atualizarTelas(); }
+      else guardar(p.new);
+    }).subscribe();
+}
+
+sb.auth.onAuthStateChange((_evento, sessao) => {
+  const user = sessao?.user;
+  usuarioEmail = user?.email || "";
   $("login").classList.toggle("hidden", !!user);
   $("app").classList.toggle("hidden", !user);
-  if (unsub) { unsub(); unsub = null; }
-  if (user) {
-    unsub = onSnapshot(col, snap => {
-      clientes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      carregado = true;
-      renderizarClientes();
-      if (clienteAtualId) abrirCliente(clienteAtualId, true);
-    }, err => alert("Erro ao carregar clientes: " + err.message));
-  } else {
-    clientes = []; carregado = false;
+  if (user && user.id !== idAtual) { idAtual = user.id; setTimeout(carregar, 0); }
+  if (!user) {
+    idAtual = null; clientes = []; carregado = false;
+    if (canal) { sb.removeChannel(canal); canal = null; }
   }
 });
 
@@ -475,22 +545,23 @@ window.salvarCliente = async () => {
     }
     let id = editandoId;
     if (id) {
-      await updateDoc(doc(db, "clientes", id), dados);
+      const ant = clientes.find(x => x.id === id);
+      const mud = ant ? [["Status", ant.status, dados.status], ["Valor", brl(ant.valor), brl(dados.valor)],
+        ["Retorno", fmtData(ant.proximoContato) || "-", fmtData(dados.proximoContato) || "-"]]
+        .filter(x => x[1] !== x[2]).map(x => registro(`${x[0]}: ${x[1]} → ${x[2]}`)) : [];
+      await atualizar(id, mud.length ? { ...dados, historico: arrayUnion(...mud) } : dados);
     } else {
-      const novo = await addDoc(col, { ...dados, documentos: [], timeline: [], criadoEm: serverTimestamp() });
+      const novo = await criar({ ...dados, documentos: [], timeline: [], historico: [registro("Cliente cadastrado")], criadoEm: serverTimestamp() });
       id = novo.id;
       editandoId = id; // se o envio de arquivos falhar, um novo "Salvar" atualiza este mesmo cliente
     }
     // Upload dos documentos para o Storage
     const novos = [];
-    $("barraIn").style.width = "0";
-    $("barra").classList.toggle("hidden", !arquivosPend.length);
     for (let i = 0; i < arquivosPend.length; i++) {
-      const file = arquivosPend[i];
       btn.textContent = `Enviando ${i + 1} de ${arquivosPend.length}...`;
-      novos.push(await enviar(file, `clientes/${id}/${Date.now()}_${file.name}`, p => { $("barraIn").style.width = Math.round(p * 100) + "%"; }));
+      novos.push(await salvarArquivo(id, arquivosPend[i]));
     }
-    if (novos.length) await updateDoc(doc(db, "clientes", id), { documentos: arrayUnion(...novos) });
+    if (novos.length) await atualizar(id, { documentos: arrayUnion(...novos) });
     limparForm();
     toast("Cliente salvo");
     location.hash = "clientes";
@@ -659,10 +730,9 @@ window.excluirCliente = async id => {
   const c = clientes.find(x => x.id === id);
   if (!confirm(`Excluir "${c?.nome}"? Isso apaga também os documentos e o histórico.`)) return;
   try {
-    for (const d of (c?.documentos || [])) {
-      try { await deleteObject(ref(storage, d.path)); } catch (_) {}
-    }
-    await deleteDoc(doc(db, "clientes", id));
+    const paths = (c?.documentos || []).map(d => d.path).filter(Boolean);
+    if (paths.length) await sb.storage.from(BUCKET).remove(paths);
+    await excluir(id);
   } catch (e) { alert("Erro ao excluir: " + e.message); }
 };
 
@@ -677,14 +747,16 @@ window.abrirCliente = (id, manterRascunho) => {
   }
 
   // Atualização em tempo real: só redesenha a timeline se o painel já estiver aberto
-  if (manterRascunho && $("timelineArea")) { renderizarTimeline(c); renderizarDocs(c); return; }
+  if (manterRascunho && $("timelineArea")) { renderizarTimeline(c); renderizarDocs(c); renderizarHistorico(c); return; }
 
 
   const tel = (c.telefone || "").replace(/\D/g, "");
+  const wa = c.whatsapp === "Sim" && tel;
   const links = [
     c.whatsapp === "Sim" && tel ? `<a class="link-btn" href="https://wa.me/55${tel}" target="_blank" rel="noopener">💬 WhatsApp</a>` : "",
     tel ? `<a class="link-btn" href="tel:+55${tel}">📞 Ligar</a>` : "",
-    c.email ? `<a class="link-btn" href="mailto:${esc(c.email)}">✉️ E-mail</a>` : ""
+    c.email ? `<a class="link-btn" href="mailto:${esc(c.email)}">✉️ E-mail</a>` : "",
+    c.proximoContato ? `<a class="link-btn" target="_blank" rel="noopener" href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent("Retorno: " + c.nome)}&dates=${dataRetorno(c).toLocaleDateString("sv-SE").replace(/-/g, "")}/${new Date(dataRetorno(c).getTime() + 864e5).toLocaleDateString("sv-SE").replace(/-/g, "")}&details=${encodeURIComponent(c.telefone || "")}">📅 Agenda</a>` : ""
   ].join("");
   const dg = soNum(c.cpf);
   const botaoReceita = dg.length === 11
@@ -707,6 +779,10 @@ window.abrirCliente = (id, manterRascunho) => {
       </div>
     </div>
     <p id="dicaReceita"></p>
+    ${wa ? `<details class="wa"><summary>💬 Mensagem pronta de WhatsApp</summary>
+      <select id="modeloWa" onchange="modeloWa('${c.id}')">${MODELOS.map((m, i) => `<option value="${i}">${m[0]}</option>`).join("")}</select>
+      <textarea id="msgWa" rows="3"></textarea>
+      <button onclick="enviarWa('${c.id}')">Abrir no WhatsApp</button></details>` : ""}
 
     <div class="grade">
       ${campo("CPF/CNPJ", esc(c.cpf))}
@@ -742,9 +818,16 @@ window.abrirCliente = (id, manterRascunho) => {
         <button onclick="adicionarComentario()">Adicionar à linha do tempo</button>
       </div>
       <div id="timelineArea"></div>
+    </div>
+
+    <div class="secao">
+      <h3>Histórico de alterações</h3>
+      <div id="histArea"></div>
     </div>`;
   renderizarTimeline(c);
   renderizarDocs(c);
+  renderizarHistorico(c);
+  if ($("modeloWa")) modeloWa(id);
 };
 
 window.fecharCliente = () => { location.hash = "clientes"; };
@@ -754,7 +837,7 @@ window.adicionarComentario = async () => {
   if (!texto || !clienteAtualId) return;
   const agora = new Date();
   try {
-    await updateDoc(doc(db, "clientes", clienteAtualId), {
+    await atualizar(clienteAtualId, {
       timeline: arrayUnion({
         tipo: $("tipoInteracao").value,
         responsavel: $("responsavel").value,
@@ -825,16 +908,164 @@ const zona = $("zona");
 ["dragleave", "drop"].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.remove("sobre"); }));
 zona.addEventListener("drop", e => adicionarArquivos(e.dataTransfer.files));
 
-function enviar(file, path, onProgresso) {
-  return new Promise((ok, falha) => {
-    const r = ref(storage, path);
-    const t = uploadBytesResumable(r, file);
-    t.on("state_changed",
-      s => onProgresso && onProgresso(s.bytesTransferred / s.totalBytes),
-      falha,
-      async () => ok({ nome: file.name, path, url: await getDownloadURL(r) }));
-  });
+async function salvarArquivo(cid, file) {
+  const seguro = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.\-]+/g, "_");
+  const path = `${cid}/${Date.now()}_${seguro}`;
+  const r = await sb.storage.from(BUCKET).upload(path, file, { contentType: file.type || undefined });
+  if (r.error) throw new Error(r.error.message);
+  return { nome: file.name, path, tamanho: file.size };
 }
+
+window.abrirArquivo = async (cid, i) => {
+  const d = clientes.find(x => x.id === cid)?.documentos?.[i];
+  if (!d) return;
+  const w = window.open("about:blank", "_blank");
+  const r = await sb.storage.from(BUCKET).createSignedUrl(d.path, 120);
+  if (r.error) { if (w) w.close(); toast("Não foi possível abrir o arquivo.", true); return; }
+  if (w) w.location.href = r.data.signedUrl; else location.href = r.data.signedUrl;
+};
+
+window.removerDoc = async (cid, i) => {
+  const d = clientes.find(x => x.id === cid)?.documentos?.[i];
+  if (!d || !confirm(`Remover "${d.nome}"?`)) return;
+  try {
+    if (d.path) await sb.storage.from(BUCKET).remove([d.path]);
+    await atualizar(cid, { documentos: arrayRemove(d), historico: arrayUnion(registro(`Documento removido: ${d.nome}`)) });
+  } catch (e) { toast("Erro ao remover: " + e.message, true); }
+};
+
+const registro = texto => ({ data: new Date().toLocaleString("pt-BR"), usuario: usuarioEmail, texto });
+
+/* ===== Painel, funil, WhatsApp, importação e backup ===== */
+const MODELOS = [
+  ["Primeiro contato", "Olá, {nome}! Tudo bem? Aqui é da Malf Capital. Posso te ajudar com a sua solicitação?"],
+  ["Retorno", "Olá, {nome}! Passando para dar retorno sobre a nossa conversa. Podemos falar hoje?"],
+  ["Documentos pendentes", "Olá, {nome}! Para avançarmos, preciso que você me envie os documentos pendentes. Pode mandar por aqui?"]
+];
+window.modeloWa = id => {
+  const c = clientes.find(x => x.id === id);
+  $("msgWa").value = MODELOS[$("modeloWa").value][1].replace("{nome}", c.nome.split(" ")[0]);
+};
+window.enviarWa = id => {
+  const c = clientes.find(x => x.id === id);
+  window.open(`https://wa.me/55${soNum(c.telefone)}?text=${encodeURIComponent($("msgWa").value)}`, "_blank", "noopener");
+};
+
+function renderizarPainel() {
+  const soma = l => l.reduce((t, c) => t + Number(c.valor), 0);
+  const abertos = clientes.filter(c => ATIVOS.includes(c.status));
+  const fechados = clientes.filter(c => c.status === "Fechado");
+  const taxa = clientes.length ? Math.round(fechados.length / clientes.length * 100) : 0;
+  const item = (c, info) => `<div class="item"><a href="#cliente/${c.id}">${esc(c.nome)}</a><span class="sub">${info}</span></div>`;
+  const retornos = clientes.filter(c => c.proximoContato && c.status !== "Encerrado" && diasDesde(dataRetorno(c)) >= 0)
+    .sort((a, b) => a.proximoContato.localeCompare(b.proximoContato));
+  const parados = abertos.map(c => ({ c, u: ultimoContato(c) })).filter(x => !x.u || diasDesde(x.u) > 15)
+    .sort((a, b) => (a.u?.getTime() ?? 0) - (b.u?.getTime() ?? 0));
+  const meses = [...Array(6)].map((_, i) => {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5 + i);
+    return { k: `${d.getFullYear()}-${d.getMonth()}`, rot: d.toLocaleDateString("pt-BR", { month: "short" }), v: 0 };
+  });
+  fechados.forEach(c => {
+    const d = c.criadoEm ? new Date(c.criadoEm) : null;
+    const m = d && meses.find(x => x.k === `${d.getFullYear()}-${d.getMonth()}`);
+    if (m) m.v += Number(c.valor);
+  });
+  const max = Math.max(1, ...meses.map(m => m.v));
+  const card = (t, v, sub) => `<div class="res est"><small>${t}</small><b>${v}</b><span>${sub}</span></div>`;
+  $("painelConteudo").innerHTML = `
+    <div class="resumo">
+      ${card("Clientes", clientes.length, "cadastrados")}
+      ${card("Em aberto", brl(soma(abertos)), abertos.length + " clientes")}
+      ${card("Fechado", brl(soma(fechados)), fechados.length + " clientes")}
+      ${card("Taxa de fechamento", taxa + "%", "dos cadastros")}
+    </div>
+    <div class="container"><h3>Retornos de hoje e atrasados (${retornos.length})</h3>
+      ${retornos.map(c => item(c, diasDesde(dataRetorno(c)) === 0 ? "hoje" : fmtData(c.proximoContato))).join("") || '<p class="vazio">Nenhum retorno pendente.</p>'}</div>
+    <div class="container"><h3>Sem contato há mais de 15 dias (${parados.length})</h3>
+      ${parados.map(x => item(x.c, x.u ? relativo(diasDesde(x.u)) : "sem contato")).join("") || '<p class="vazio">Todos os clientes em aberto estão em dia.</p>'}</div>
+    <div class="container"><h3>Valor fechado por mês de cadastro</h3>
+      <div class="barras">${meses.map(m => `<div class="bcol"><span>${m.v ? brl(m.v).replace(",00", "") : ""}</span><i style="height:${Math.round(m.v / max * 100)}%"></i><span>${m.rot}</span></div>`).join("")}</div></div>`;
+}
+
+function renderizarFunil() {
+  $("funilConteudo").innerHTML = STATUS.map(st => {
+    const l = clientes.filter(c => c.status === st).sort((a, b) => b.valor - a.valor);
+    const total = l.reduce((t, c) => t + Number(c.valor), 0);
+    return `<div class="col" ondragover="event.preventDefault()" ondrop="soltar(event,'${st}')">
+      <h3>${badge(st)}</h3><div class="sub">${l.length} · ${brl(total)}</div>
+      ${l.map(c => `<div class="kcard" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${c.id}')">
+        <a href="#cliente/${c.id}">${esc(c.nome)}</a><div class="sub">${brl(c.valor)}</div>
+        <select onchange="mudarStatus('${c.id}',this.value)">${STATUS.map(x => `<option ${x === st ? "selected" : ""}>${x}</option>`).join("")}</select>
+      </div>`).join("")}</div>`;
+  }).join("");
+}
+window.soltar = (e, st) => { e.preventDefault(); mudarStatus(e.dataTransfer.getData("text/plain"), st); };
+window.mudarStatus = async (id, st) => {
+  const c = clientes.find(x => x.id === id);
+  if (!c || c.status === st) return;
+  try { await atualizar(id, { status: st, historico: arrayUnion(registro(`Status: ${c.status} → ${st}`)) }); }
+  catch (e) { toast("Erro ao mover: " + e.message, true); }
+};
+
+window.exportarJSON = () => {
+  const blob = new Blob([JSON.stringify(clientes, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `backup-clientes-${hojeISO()}.json`; a.click();
+  URL.revokeObjectURL(a.href);
+  toast("Backup baixado (dados e lista de documentos; os arquivos não vão no JSON).");
+};
+
+function lerCSV(txt) {
+  txt = txt.replace(/^\ufeff/, "");
+  const prim = txt.split("\n")[0];
+  const sep = (prim.match(/;/g) || []).length >= (prim.match(/,/g) || []).length ? ";" : ",";
+  const linhas = []; let l = [], c = "", q = false;
+  for (let i = 0; i < txt.length; i++) {
+    const ch = txt[i];
+    if (q) { if (ch === '"') { if (txt[i + 1] === '"') { c += '"'; i++; } else q = false; } else c += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === sep) { l.push(c); c = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && txt[i + 1] === "\n") i++; l.push(c); c = ""; if (l.some(x => x !== "")) linhas.push(l); l = []; }
+    else c += ch;
+  }
+  if (c || l.length) { l.push(c); linhas.push(l); }
+  return linhas;
+}
+const fmtDoc = d => d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+  : d.length === 14 ? `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}` : d;
+const fmtTel = d => d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : d;
+
+window.importarCSV = async inp => {
+  const f = inp.files[0]; inp.value = "";
+  if (!f) return;
+  const linhas = lerCSV(await f.text());
+  const cab = (linhas.shift() || []).map(x => x.trim().toLowerCase());
+  const ix = n => cab.findIndex(x => x.startsWith(n));
+  const col = { nome: ix("nome"), cpf: ix("cpf"), nasc: ix("nasc"), tel: ix("tel"), wa: ix("whats"), mail: ix("e-mail"), valor: ix("valor"), st: ix("status"), ret: ix("retorno"), obs: ix("obs") };
+  if (col.nome < 0) { toast('A planilha precisa ter a coluna "Nome".', true); return; }
+  const g = (l, k) => col[k] >= 0 ? (l[col[k]] || "").trim() : "";
+  const iso = d => { const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? `${m[3]}-${m[2]}-${m[1]}` : /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ""; };
+  const num = v => { const t = v.replace(/[^\d,.-]/g, ""); return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t) || 0; };
+  const cpfs = new Set(clientes.map(c => soNum(c.cpf)).filter(Boolean));
+  const novos = []; let ign = 0;
+  for (const l of linhas) {
+    const nome = g(l, "nome"), cpf = soNum(g(l, "cpf"));
+    if (!nome || (cpf && cpfs.has(cpf))) { ign++; continue; }
+    if (cpf) cpfs.add(cpf);
+    const st = g(l, "st");
+    novos.push({
+      nome, cpf: fmtDoc(cpf), nascimento: iso(g(l, "nasc")), telefone: fmtTel(soNum(g(l, "tel"))),
+      whatsapp: /^n/i.test(g(l, "wa")) ? "Não" : "Sim", email: g(l, "mail"), valor: num(g(l, "valor")),
+      status: STATUS.includes(st) ? st : "Em negociação", observacoes: g(l, "obs"), proximoContato: iso(g(l, "ret"))
+    });
+  }
+  if (!novos.length) { toast(`Nada para importar (${ign} linha(s) ignorada(s)).`, true); return; }
+  if (!confirm(`Importar ${novos.length} cliente(s)? ${ign} linha(s) serão ignoradas (sem nome ou CPF/CNPJ já cadastrado).`)) return;
+  try {
+    for (const n of novos) await criar({ ...n, documentos: [], timeline: [], historico: [registro("Importado via CSV")], criadoEm: serverTimestamp() });
+    toast(`${novos.length} cliente(s) importado(s).`);
+  } catch (e) { toast("Erro na importação: " + e.message, true); }
+};
 
 /* ===== Receita: CNPJ (automático) e CPF (semi-automático) ===== */
 const hojeISO = () => new Date().toLocaleDateString("sv-SE");
@@ -887,7 +1118,7 @@ window.atualizarSituacaoCNPJ = async id => {
     dica.textContent = "Consultando a Receita...";
     const d = await consultaCNPJ(soNum(c.cpf));
     if (!d) { dica.textContent = "CNPJ não encontrado na base da Receita."; return; }
-    await updateDoc(doc(db, "clientes", id), { situacaoReceita: d.descricao_situacao_cadastral || "", situacaoReceitaEm: hojeISO() });
+    await atualizar(id, { situacaoReceita: d.descricao_situacao_cadastral || "", situacaoReceitaEm: hojeISO() });
     dica.textContent = `Situação atualizada: ${d.descricao_situacao_cadastral}.`;
   } catch (e) { dica.textContent = "Não foi possível consultar agora. Tente novamente mais tarde."; }
 };
@@ -909,9 +1140,9 @@ window.anexarDocumentos = async id => {
     const novos = [];
     for (const file of files) {
       if (!arquivoOk(file)) continue;
-      novos.push(await enviar(file, `clientes/${id}/${Date.now()}_${file.name}`));
+      novos.push(await salvarArquivo(id, file));
     }
-    if (novos.length) await updateDoc(doc(db, "clientes", id), { documentos: arrayUnion(...novos) });
+    if (novos.length) await atualizar(id, { documentos: arrayUnion(...novos) });
     $("novoDoc").value = "";
   } catch (e) { alert("Erro ao anexar: " + e.message); }
   finally { btn.disabled = false; }
@@ -920,9 +1151,19 @@ window.anexarDocumentos = async id => {
 function renderizarDocs(c) {
   const area = $("docsArea");
   if (!area) return;
-  area.innerHTML = (c.documentos || []).map(d =>
-    `<div class="documento">📄 <a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.nome)}</a></div>`).join("")
+  area.innerHTML = (c.documentos || []).map((d, i) => `<div class="arq"><span>📄 ${d.url
+      ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.nome)}</a>`
+      : `<a href="#" onclick="abrirArquivo('${c.id}',${i});return false">${esc(d.nome)}</a>`}</span>
+      <button type="button" title="Remover" onclick="removerDoc('${c.id}',${i})">✕</button></div>`).join("")
     || '<p class="vazio">Nenhum documento anexado.</p>';
+}
+
+function renderizarHistorico(c) {
+  const a = $("histArea");
+  if (!a) return;
+  a.innerHTML = (c.historico || []).slice().reverse().map(h =>
+    `<div class="item"><span>${esc(h.texto)}</span><span class="sub">${esc(h.data)} · ${esc(h.usuario)}</span></div>`).join("")
+    || '<p class="vazio">Sem registros.</p>';
 }
 
 function renderizarTimeline(c) {
@@ -937,6 +1178,7 @@ function renderizarTimeline(c) {
       ${esc(i.comentario)}
     </div>`).join("") || '<p class="vazio">Nenhuma interação registrada.</p>';
 }
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 rota();
 </script>
 </body>
