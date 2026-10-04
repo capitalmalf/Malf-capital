@@ -96,6 +96,59 @@ td{border:none;padding:5px}
 button{width:100%;margin-top:5px}
 .topo button{width:auto}
 }
+
+/* ---- Formulário e mobile ---- */
+input,select,textarea{font:inherit;font-size:16px;min-height:44px;min-width:0;max-width:100%;background:#fff;color:#111}
+textarea{min-height:96px;resize:vertical}
+input[type=date]{appearance:none;-webkit-appearance:none}
+input[type=date]::-webkit-date-and-time-value{text-align:left}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#0078d4;box-shadow:0 0 0 3px rgba(0,120,212,.18)}
+input.invalido,select.invalido,textarea.invalido{border-color:#dc2626;box-shadow:0 0 0 3px rgba(220,38,38,.12)}
+label{display:block;font-weight:bold;font-size:14px;margin-bottom:6px;color:#374151}
+fieldset{border:none;margin:0 0 8px;min-width:0}
+legend{font-weight:bold;font-size:17px;margin-bottom:12px;padding:0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.g2 .full{grid-column:1/-1}
+.f{margin-bottom:14px;min-width:0}
+.f input,.f select,.f textarea{margin-bottom:0}
+.f #cnpjInfo{margin:6px 0 0}
+.erro{color:#b91c1c;font-size:13px;margin-top:5px}
+.erro:empty{display:none}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;font-weight:normal;margin:4px 0 0}
+.check input{width:20px;height:20px;min-height:0;margin:0}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.chips button{width:auto;margin:0;padding:8px 14px;font-size:14px;background:#eff6ff;color:#0078d4;border:1px solid #bfdbfe}
+.zona{display:block;border:2px dashed #93c5fd;border-radius:10px;padding:22px 14px;text-align:center;color:#1e40af;background:#f8fbff;cursor:pointer;margin:0;font-weight:normal}
+.zona.sobre{background:#dbeafe}
+.arq{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#f5f5f5;border-radius:8px;padding:8px 10px;margin-top:8px;font-size:14px}
+.arq span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.arq button{width:auto;margin:0;padding:4px 12px;background:#dc2626;flex:none;min-height:36px}
+.progresso{height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden;margin-top:12px}
+#barraIn{height:100%;width:0;background:#0078d4;transition:width .2s}
+.barra-acoes{display:flex;gap:10px;margin-top:10px}
+.barra-acoes button{margin:0}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+.toast.err{background:#b91c1c}
+@media(max-width:768px){
+body{padding:12px}
+.container{padding:16px}
+.g2{grid-template-columns:1fr}
+button{min-height:44px}
+.menu button{flex:1;margin:0}
+.barra-acoes{position:sticky;bottom:0;background:#fff;margin:12px -16px -16px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -4px 12px rgba(0,0,0,.08);border-radius:0 0 12px 12px;z-index:5}
+.barra-acoes button{flex:1;width:auto;margin:0}
+.barra-acoes #btnSalvar{flex:2}
+.resumo{grid-template-columns:1fr 1fr}
+.resumo .res:first-child{grid-column:1/-1}
+td[data-label]{display:flex;justify-content:space-between;align-items:center;gap:10px}
+td[data-label]::before{content:attr(data-label);color:#6b7280;font-size:13px}
+td.acoes{display:flex;gap:10px}
+td.acoes button{flex:1;width:auto;margin:0}
+td.acoes .perigo{margin-left:0}
+#login{margin:24px auto}
+.toast{bottom:100px}
+}
 </style>
 </head>
 <body>
@@ -125,26 +178,91 @@ button{width:100%;margin-top:5px}
   <div id="paginaNovo" class="hidden">
   <div class="container">
     <h2 id="tituloForm">Novo Cliente</h2>
-    <input id="nome" placeholder="Nome Completo">
-    <input id="cpf" placeholder="CPF/CNPJ">
-    <div id="cnpjInfo" class="sub"></div>
-    <label>Data de nascimento</label>
-    <input id="nascimento" type="date">
-    <input id="telefone" placeholder="Telefone">
-    <select id="whatsapp"><option>Sim</option><option>Não</option></select>
-    <input id="email" placeholder="E-mail">
-    <input id="valor" type="number" placeholder="Valor Negociado">
-    <select id="status">
-      <option>Em negociação</option><option>Fechado</option>
-      <option>Em acompanhamento</option><option>Encerrado</option>
-    </select>
-    <label>Próximo contato (retorno)</label>
-    <input id="proximoContato" type="date">
-    <textarea id="observacoes" placeholder="Observações gerais"></textarea>
-    <label>Documentos</label>
-    <input id="documentos" type="file" multiple>
-    <button id="btnSalvar" onclick="salvarCliente()">Salvar Cliente</button>
-    <button class="sec" id="btnCancelar" onclick="cancelarEdicao()">Cancelar</button>
+
+    <fieldset>
+      <legend>Dados pessoais</legend>
+      <div class="g2">
+        <div class="f full">
+          <label for="nome">Nome completo *</label>
+          <input id="nome" autocomplete="off" placeholder="Ex.: Maria da Silva">
+          <div class="erro" id="erro-nome"></div>
+        </div>
+        <div class="f">
+          <label for="cpf">CPF ou CNPJ</label>
+          <input id="cpf" inputmode="numeric" autocomplete="off" placeholder="Somente números">
+          <div class="erro" id="erro-cpf"></div>
+          <div id="cnpjInfo" class="sub"></div>
+        </div>
+        <div class="f">
+          <label for="nascimento">Data de nascimento</label>
+          <input id="nascimento" type="date">
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Contato</legend>
+      <div class="g2">
+        <div class="f">
+          <label for="telefone">Telefone</label>
+          <input id="telefone" type="tel" inputmode="tel" autocomplete="off" placeholder="(00) 00000-0000">
+          <div class="erro" id="erro-telefone"></div>
+          <label class="check"><input type="checkbox" id="whatsapp" checked> Este número tem WhatsApp</label>
+        </div>
+        <div class="f">
+          <label for="email">E-mail</label>
+          <input id="email" type="email" inputmode="email" autocapitalize="none" autocomplete="off" placeholder="nome@exemplo.com">
+          <div class="erro" id="erro-email"></div>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Negociação</legend>
+      <div class="g2">
+        <div class="f">
+          <label for="valor">Valor negociado</label>
+          <input id="valor" inputmode="numeric" autocomplete="off" placeholder="R$ 0,00">
+        </div>
+        <div class="f">
+          <label for="status">Status</label>
+          <select id="status">
+            <option>Em negociação</option><option>Fechado</option>
+            <option>Em acompanhamento</option><option>Encerrado</option>
+          </select>
+        </div>
+        <div class="f full">
+          <label for="proximoContato">Próximo contato (retorno)</label>
+          <input id="proximoContato" type="date">
+          <div class="chips">
+            <button type="button" onclick="retornoRapido(1)">Amanhã</button>
+            <button type="button" onclick="retornoRapido(3)">Em 3 dias</button>
+            <button type="button" onclick="retornoRapido(7)">Em 1 semana</button>
+            <button type="button" onclick="retornoRapido('m')">Em 1 mês</button>
+            <button type="button" onclick="retornoRapido(0)">Limpar</button>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Observações e documentos</legend>
+      <div class="f">
+        <label for="observacoes">Observações gerais</label>
+        <textarea id="observacoes" rows="4" placeholder="Anotações sobre o cliente"></textarea>
+      </div>
+      <div class="f">
+        <label class="zona" id="zona" for="documentos">📎 Toque ou arraste arquivos aqui<br><small>PDF, imagens, Word ou Excel · até 10 MB cada</small></label>
+        <input id="documentos" type="file" multiple class="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx">
+        <div id="listaArquivos"></div>
+        <div class="progresso hidden" id="barra"><div id="barraIn"></div></div>
+      </div>
+    </fieldset>
+
+    <div class="barra-acoes">
+      <button id="btnSalvar" onclick="salvarCliente()">Salvar cliente</button>
+      <button class="sec" id="btnCancelar" onclick="cancelarEdicao()">Cancelar</button>
+    </div>
   </div>
   </div>
 
@@ -189,13 +307,15 @@ button{width:100%;margin-top:5px}
   </div>
 </div>
 
+<div id="toast" class="toast"></div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject }
+import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 /* ===== 1) COLE AQUI A CONFIG DO SEU PROJETO (Console Firebase > Configurações > Seus apps) ===== */
@@ -228,6 +348,8 @@ let clientes = [];
 let clienteAtualId = null;
 let carregado = false;
 let ultimaConsulta = null;
+let arquivosPend = [];
+let sujo = false;
 let editandoId = null;
 let ordemValor = false;
 let unsub = null;
@@ -245,10 +367,17 @@ function rota() {
   clienteAtualId = m ? m[1] : null;
   if (m) abrirCliente(clienteAtualId);
   window.scrollTo(0, 0);
+  if (novo && matchMedia("(pointer:fine)").matches) setTimeout(() => $("nome").focus(), 50);
 }
 window.addEventListener("hashchange", rota);
-$("navClientes").onclick = () => { location.hash = "clientes"; };
-$("navNovo").onclick = () => { limparForm(); location.hash = "novo"; };
+$("navClientes").onclick = () => {
+  if (location.hash === "#novo" && sujo) { if (!confirm("Descartar as alterações não salvas?")) return; limparForm(); }
+  location.hash = "clientes";
+};
+$("navNovo").onclick = () => {
+  if (location.hash === "#novo" && sujo && !confirm("Descartar as alterações não salvas?")) return;
+  limparForm(); location.hash = "novo";
+};
 
 /* ===== Autenticação ===== */
 $("btnEntrar").onclick = async () => {
@@ -298,23 +427,31 @@ $("telefone").addEventListener("input", function () {
 /* ===== Cadastro / edição ===== */
 function limparForm() {
   ["nome","cpf","nascimento","telefone","email","valor","observacoes","documentos","proximoContato"].forEach(i => $(i).value = "");
-  $("whatsapp").selectedIndex = 0;
   $("status").selectedIndex = 0;
   editandoId = null;
   ultimaConsulta = null;
   $("cnpjInfo").textContent = "";
+  $("whatsapp").checked = true;
+  arquivosPend = []; renderArquivos(); limparErros(); sujo = false;
   $("tituloForm").textContent = "Novo Cliente";
-  $("btnSalvar").textContent = "Salvar Cliente";
+  $("btnSalvar").textContent = "Salvar cliente";
 }
 
-window.cancelarEdicao = () => { limparForm(); location.hash = "clientes"; };
+window.cancelarEdicao = () => {
+  if (sujo && !confirm("Descartar as alterações não salvas?")) return;
+  limparForm(); location.hash = "clientes";
+};
 
 window.salvarCliente = async () => {
-  if (!$("nome").value.trim()) { alert("Informe o nome do cliente."); return; }
+  limparErros();
   const doc_ = soNum($("cpf").value), tel_ = soNum($("telefone").value), mail_ = $("email").value.trim();
-  if (doc_ && !(doc_.length === 11 ? cpfOk(doc_) : doc_.length === 14 ? cnpjOk(doc_) : false)) { alert("CPF/CNPJ inválido. Confira os números."); return; }
-  if (tel_ && ![10, 11].includes(tel_.length)) { alert("Telefone incompleto. Informe DDD + número."); return; }
-  if (mail_ && !/^\S+@\S+\.\S+$/.test(mail_)) { alert("E-mail inválido."); return; }
+  let primeiro = null;
+  const erro = (campo, msg) => { $("erro-" + campo).textContent = msg; $(campo).classList.add("invalido"); primeiro = primeiro || $(campo); };
+  if (!$("nome").value.trim()) erro("nome", "Informe o nome do cliente.");
+  if (doc_ && !(doc_.length === 11 ? cpfOk(doc_) : doc_.length === 14 ? cnpjOk(doc_) : false)) erro("cpf", "CPF/CNPJ inválido. Confira os números.");
+  if (tel_ && ![10, 11].includes(tel_.length)) erro("telefone", "Telefone incompleto. Informe DDD + número.");
+  if (mail_ && !/^\S+@\S+\.\S+$/.test(mail_)) erro("email", "E-mail inválido.");
+  if (primeiro) { primeiro.focus(); primeiro.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
   const dup = doc_ && clientes.find(c => c.id !== editandoId && soNum(c.cpf) === doc_);
   if (dup && !confirm(`Já existe um cliente com este CPF/CNPJ: ${dup.nome}. Salvar mesmo assim?`)) return;
   const btn = $("btnSalvar");
@@ -325,9 +462,9 @@ window.salvarCliente = async () => {
       cpf: $("cpf").value,
       nascimento: $("nascimento").value,
       telefone: $("telefone").value,
-      whatsapp: $("whatsapp").value,
+      whatsapp: $("whatsapp").checked ? "Sim" : "Não",
       email: $("email").value.trim(),
-      valor: Number($("valor").value) || 0,
+      valor: lerValor(),
       status: $("status").value,
       observacoes: $("observacoes").value,
       proximoContato: $("proximoContato").value
@@ -342,23 +479,27 @@ window.salvarCliente = async () => {
     } else {
       const novo = await addDoc(col, { ...dados, documentos: [], timeline: [], criadoEm: serverTimestamp() });
       id = novo.id;
+      editandoId = id; // se o envio de arquivos falhar, um novo "Salvar" atualiza este mesmo cliente
     }
     // Upload dos documentos para o Storage
     const novos = [];
-    for (const file of $("documentos").files) {
-      const path = `clientes/${id}/${Date.now()}_${file.name}`;
-      const r = ref(storage, path);
-      await uploadBytes(r, file);
-      novos.push({ nome: file.name, path, url: await getDownloadURL(r) });
+    $("barraIn").style.width = "0";
+    $("barra").classList.toggle("hidden", !arquivosPend.length);
+    for (let i = 0; i < arquivosPend.length; i++) {
+      const file = arquivosPend[i];
+      btn.textContent = `Enviando ${i + 1} de ${arquivosPend.length}...`;
+      novos.push(await enviar(file, `clientes/${id}/${Date.now()}_${file.name}`, p => { $("barraIn").style.width = Math.round(p * 100) + "%"; }));
     }
     if (novos.length) await updateDoc(doc(db, "clientes", id), { documentos: arrayUnion(...novos) });
     limparForm();
-    alert("Cliente salvo");
+    toast("Cliente salvo");
     location.hash = "clientes";
   } catch (e) {
     alert("Erro ao salvar: " + e.message);
   } finally {
     btn.disabled = false;
+    btn.textContent = editandoId ? "Salvar alterações" : "Salvar cliente";
+    $("barra").classList.add("hidden");
   }
 };
 
@@ -367,10 +508,12 @@ window.editarCliente = id => {
   if (!c) return;
   editandoId = id;
   $("nome").value = c.nome; $("cpf").value = c.cpf; $("nascimento").value = c.nascimento || "";
-  $("telefone").value = c.telefone; $("whatsapp").value = c.whatsapp; $("email").value = c.email;
-  $("valor").value = c.valor; $("proximoContato").value = c.proximoContato || ""; $("status").value = c.status; $("observacoes").value = c.observacoes || "";
+  $("telefone").value = c.telefone; $("whatsapp").checked = c.whatsapp === "Sim"; $("email").value = c.email;
+  $("valor").value = c.valor ? brl(c.valor) : ""; $("proximoContato").value = c.proximoContato || ""; $("status").value = c.status; $("observacoes").value = c.observacoes || "";
   $("tituloForm").textContent = "Editar Cliente";
   $("btnSalvar").textContent = "Salvar alterações";
+  arquivosPend = []; renderArquivos(); limparErros(); sujo = false;
+  ultimaConsulta = null; $("cnpjInfo").textContent = "";
   location.hash = "novo";
 };
 
@@ -474,8 +617,9 @@ function renderizarClientes() {
     }
     return `<tr class="linha" onclick="location.hash='cliente/${c.id}'">
       <td><a class="nome-link" href="#cliente/${c.id}">${esc(c.nome)}</a><div class="sub">${esc(c.cpf) || "Sem CPF/CNPJ"}</div></td>
-      <td>${esc(c.telefone) || "-"} ${c.whatsapp === "Sim" && c.telefone ? "💬" : ""}</td>
-      <td>${brl(c.valor)}</td><td>${badge(c.status)}</td><td>${ultimo}</td><td>${ret}</td>
+      <td data-label="Telefone">${esc(c.telefone) || "-"} ${c.whatsapp === "Sim" && c.telefone ? "💬" : ""}</td>
+      <td data-label="Valor">${brl(c.valor)}</td><td data-label="Status">${badge(c.status)}</td>
+      <td data-label="Último contato">${ultimo}</td><td data-label="Retorno">${ret}</td>
       <td class="acoes">
         <button class="icone sec" title="Editar" onclick="event.stopPropagation();editarCliente('${c.id}')">✏️</button>
         <button class="icone perigo" title="Excluir" onclick="event.stopPropagation();excluirCliente('${c.id}')">🗑️</button>
@@ -623,6 +767,75 @@ window.adicionarComentario = async () => {
   } catch (e) { alert("Erro ao salvar comentário: " + e.message); }
 };
 
+/* ===== Formulário: valor, arquivos, avisos ===== */
+const lerValor = () => (Number(soNum($("valor").value)) || 0) / 100;
+$("valor").addEventListener("input", function () {
+  const n = Number(soNum(this.value));
+  this.value = n ? (n / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
+});
+
+function toast(msg, erro) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "toast " + (erro ? "err " : "") + "show";
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove("show"), 3000);
+}
+function limparErros() {
+  document.querySelectorAll(".erro").forEach(e => e.textContent = "");
+  document.querySelectorAll(".invalido").forEach(e => e.classList.remove("invalido"));
+}
+$("paginaNovo").addEventListener("input", e => {
+  sujo = true;
+  const id = e.target.id;
+  if (!id) return;
+  e.target.classList.remove("invalido");
+  const er = $("erro-" + id);
+  if (er) er.textContent = "";
+});
+window.addEventListener("beforeunload", e => { if (sujo) { e.preventDefault(); e.returnValue = ""; } });
+
+window.retornoRapido = n => {
+  if (!n) { $("proximoContato").value = ""; sujo = true; return; }
+  const d = new Date();
+  if (n === "m") d.setMonth(d.getMonth() + 1); else d.setDate(d.getDate() + n);
+  $("proximoContato").value = d.toLocaleDateString("sv-SE");
+  sujo = true;
+};
+
+const MAX_MB = 10;
+const arquivoOk = f => {
+  if (!/\.(pdf|png|jpe?g|webp|docx?|xlsx?)$/i.test(f.name)) { toast(`"${f.name}": tipo não aceito. Use PDF, imagem, Word ou Excel.`, true); return false; }
+  if (f.size > MAX_MB * 1048576) { toast(`"${f.name}" passa de ${MAX_MB} MB.`, true); return false; }
+  return true;
+};
+function renderArquivos() {
+  $("listaArquivos").innerHTML = arquivosPend.map((f, i) =>
+    `<div class="arq"><span>📄 ${esc(f.name)} (${(f.size / 1048576).toFixed(1)} MB)</span><button type="button" title="Remover" onclick="removerArquivo(${i})">✕</button></div>`).join("");
+}
+function adicionarArquivos(lista) {
+  for (const f of lista) if (arquivoOk(f)) arquivosPend.push(f);
+  sujo = true;
+  renderArquivos();
+}
+window.removerArquivo = i => { arquivosPend.splice(i, 1); renderArquivos(); };
+$("documentos").addEventListener("change", e => { adicionarArquivos(e.target.files); e.target.value = ""; });
+const zona = $("zona");
+["dragenter", "dragover"].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.add("sobre"); }));
+["dragleave", "drop"].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.remove("sobre"); }));
+zona.addEventListener("drop", e => adicionarArquivos(e.dataTransfer.files));
+
+function enviar(file, path, onProgresso) {
+  return new Promise((ok, falha) => {
+    const r = ref(storage, path);
+    const t = uploadBytesResumable(r, file);
+    t.on("state_changed",
+      s => onProgresso && onProgresso(s.bytesTransferred / s.totalBytes),
+      falha,
+      async () => ok({ nome: file.name, path, url: await getDownloadURL(r) }));
+  });
+}
+
 /* ===== Receita: CNPJ (automático) e CPF (semi-automático) ===== */
 const hojeISO = () => new Date().toLocaleDateString("sv-SE");
 
@@ -695,12 +908,10 @@ window.anexarDocumentos = async id => {
   try {
     const novos = [];
     for (const file of files) {
-      const path = `clientes/${id}/${Date.now()}_${file.name}`;
-      const r = ref(storage, path);
-      await uploadBytes(r, file);
-      novos.push({ nome: file.name, path, url: await getDownloadURL(r) });
+      if (!arquivoOk(file)) continue;
+      novos.push(await enviar(file, `clientes/${id}/${Date.now()}_${file.name}`));
     }
-    await updateDoc(doc(db, "clientes", id), { documentos: arrayUnion(...novos) });
+    if (novos.length) await updateDoc(doc(db, "clientes", id), { documentos: arrayUnion(...novos) });
     $("novoDoc").value = "";
   } catch (e) { alert("Erro ao anexar: " + e.message); }
   finally { btn.disabled = false; }
