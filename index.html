@@ -52,6 +52,8 @@ th,td{border:1px solid #ddd;padding:10px}
 .vazio{color:#6b7280}
 .link-btn{display:inline-block;padding:10px 15px;border-radius:8px;background:#fff;color:#0078d4;border:1px solid #0078d4;text-decoration:none;font-size:14px;text-align:center}
 .documento a{display:block}
+td .link-btn{margin-right:4px}
+@media(max-width:768px){td .link-btn{display:block;margin:5px 0 0}}
 @media(max-width:768px){.link-btn{flex:1 1 100%}}
 .menu{display:flex;gap:8px;margin-bottom:20px}
 .menu button{background:#fff;color:#0078d4;border:1px solid #0078d4}
@@ -133,7 +135,11 @@ button{width:100%;margin-top:5px}
     </table>
   </div>
 
-  <div id="detalhesCliente" class="container hidden"></div>
+  </div>
+
+  <!-- PÁGINA: DETALHES DO CLIENTE -->
+  <div id="paginaCliente" class="hidden">
+    <div id="detalhesCliente" class="container"></div>
   </div>
 </div>
 
@@ -174,23 +180,28 @@ const tipos = {whatsapp:"💬 WhatsApp", ligacao:"📞 Ligação", email:"✉️
 
 let clientes = [];
 let clienteAtualId = null;
+let carregado = false;
 let editandoId = null;
 let ordemValor = false;
 let unsub = null;
 
 /* ===== Navegação entre páginas ===== */
 function rota() {
-  const novo = location.hash === "#novo";
+  const h = location.hash;
+  const novo = h === "#novo";
+  const m = h.match(/^#cliente\/(.+)$/);
   $("paginaNovo").classList.toggle("hidden", !novo);
-  $("paginaClientes").classList.toggle("hidden", novo);
+  $("paginaCliente").classList.toggle("hidden", !m);
+  $("paginaClientes").classList.toggle("hidden", novo || !!m);
   $("navNovo").classList.toggle("ativo", novo);
   $("navClientes").classList.toggle("ativo", !novo);
+  clienteAtualId = m ? m[1] : null;
+  if (m) abrirCliente(clienteAtualId);
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", rota);
 $("navClientes").onclick = () => { location.hash = "clientes"; };
 $("navNovo").onclick = () => { limparForm(); location.hash = "novo"; };
-rota();
 
 /* ===== Autenticação ===== */
 $("btnEntrar").onclick = async () => {
@@ -211,11 +222,12 @@ onAuthStateChanged(auth, user => {
   if (user) {
     unsub = onSnapshot(col, snap => {
       clientes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      carregado = true;
       renderizarClientes();
       if (clienteAtualId) abrirCliente(clienteAtualId, true);
     }, err => alert("Erro ao carregar clientes: " + err.message));
   } else {
-    clientes = []; clienteAtualId = null;
+    clientes = []; carregado = false;
   }
 });
 
@@ -321,7 +333,7 @@ window.renderizarClientes = () => {
       <td>${c.whatsapp === "Sim" ? "✅" : "❌"}</td>
       <td>${brl(c.valor)}</td><td>${badge(c.status)}</td><td>${esc(ultimo)}</td>
       <td>
-        <button onclick="abrirCliente('${c.id}')">Abrir</button>
+        <a class="link-btn" href="#cliente/${c.id}">Abrir</a>
         <button class="sec" onclick="editarCliente('${c.id}')">Editar</button>
         <button onclick="excluirCliente('${c.id}')">Excluir</button>
       </td></tr>`;
@@ -343,7 +355,6 @@ window.excluirCliente = async id => {
       try { await deleteObject(ref(storage, d.path)); } catch (_) {}
     }
     await deleteDoc(doc(db, "clientes", id));
-    if (clienteAtualId === id) { clienteAtualId = null; $("detalhesCliente").classList.add("hidden"); }
   } catch (e) { alert("Erro ao excluir: " + e.message); }
 };
 
@@ -351,13 +362,15 @@ window.excluirCliente = async id => {
 window.abrirCliente = (id, manterRascunho) => {
   const c = clientes.find(x => x.id === id);
   const div = $("detalhesCliente");
-  if (!c) { div.classList.add("hidden"); return; }
-  clienteAtualId = id;
+  if (!c) {
+    div.innerHTML = `<div class="det-acoes"><button class="sec" onclick="fecharCliente()">← Voltar</button></div>
+      <p class="vazio" style="margin-top:15px">${carregado ? "Cliente não encontrado." : "Carregando..."}</p>`;
+    return;
+  }
 
   // Atualização em tempo real: só redesenha a timeline se o painel já estiver aberto
   if (manterRascunho && $("timelineArea")) { renderizarTimeline(c); return; }
 
-  div.classList.remove("hidden");
   const docs = (c.documentos || []).map(d =>
     `<div class="documento">📄 <a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.nome)}</a></div>`).join("");
 
@@ -379,7 +392,7 @@ window.abrirCliente = (id, manterRascunho) => {
       <div class="det-acoes">
         ${links}
         <button class="sec" onclick="editarCliente('${c.id}')">Editar</button>
-        <button class="sec" onclick="fecharCliente()">Fechar</button>
+        <button class="sec" onclick="fecharCliente()">← Voltar</button>
       </div>
     </div>
 
@@ -414,10 +427,7 @@ window.abrirCliente = (id, manterRascunho) => {
   renderizarTimeline(c);
 };
 
-window.fecharCliente = () => {
-  clienteAtualId = null;
-  $("detalhesCliente").classList.add("hidden");
-};
+window.fecharCliente = () => { location.hash = "clientes"; };
 
 window.adicionarComentario = async () => {
   const texto = $("novoComentario").value.trim();
@@ -449,6 +459,7 @@ function renderizarTimeline(c) {
       ${esc(i.comentario)}
     </div>`).join("") || '<p class="vazio">Nenhuma interação registrada.</p>';
 }
+rota();
 </script>
 </body>
 </html>
