@@ -30,6 +30,9 @@ th,td{border:1px solid #ddd;padding:10px}
 #erroLogin{color:#c00;margin-bottom:10px}
 .topo{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}
 .topo h1{margin:0}
+.menu{display:flex;gap:8px;margin-bottom:20px}
+.menu button{background:#fff;color:#0078d4;border:1px solid #0078d4}
+.menu button.ativo{background:#0078d4;color:#fff}
 @media(max-width:768px){
 table,thead,tbody,th,td,tr{display:block}
 thead{display:none}
@@ -58,6 +61,13 @@ button{width:100%;margin-top:5px}
     <button class="sec" id="btnSair">Sair</button>
   </div>
 
+  <div class="menu">
+    <button id="navClientes" class="ativo">Clientes</button>
+    <button id="navNovo">+ Novo Cliente</button>
+  </div>
+
+  <!-- PÁGINA: NOVO CLIENTE -->
+  <div id="paginaNovo" class="hidden">
   <div class="container">
     <h2 id="tituloForm">Novo Cliente</h2>
     <input id="nome" placeholder="Nome Completo">
@@ -75,9 +85,12 @@ button{width:100%;margin-top:5px}
     <label>Documentos</label>
     <input id="documentos" type="file" multiple>
     <button id="btnSalvar" onclick="salvarCliente()">Salvar Cliente</button>
-    <button class="sec hidden" id="btnCancelar" onclick="cancelarEdicao()">Cancelar edição</button>
+    <button class="sec" id="btnCancelar" onclick="cancelarEdicao()">Cancelar</button>
+  </div>
   </div>
 
+  <!-- PÁGINA: CLIENTES -->
+  <div id="paginaClientes">
   <div class="container">
     <h2>Clientes</h2>
     <input id="busca" placeholder="Buscar cliente..." oninput="renderizarClientes()">
@@ -98,6 +111,7 @@ button{width:100%;margin-top:5px}
   </div>
 
   <div id="detalhesCliente" class="container hidden"></div>
+  </div>
 </div>
 
 <script type="module">
@@ -136,6 +150,20 @@ let clienteAtualId = null;
 let editandoId = null;
 let ordemValor = false;
 let unsub = null;
+
+/* ===== Navegação entre páginas ===== */
+function rota() {
+  const novo = location.hash === "#novo";
+  $("paginaNovo").classList.toggle("hidden", !novo);
+  $("paginaClientes").classList.toggle("hidden", novo);
+  $("navNovo").classList.toggle("ativo", novo);
+  $("navClientes").classList.toggle("ativo", !novo);
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", rota);
+$("navClientes").onclick = () => { location.hash = "clientes"; };
+$("navNovo").onclick = () => { limparForm(); location.hash = "novo"; };
+rota();
 
 /* ===== Autenticação ===== */
 $("btnEntrar").onclick = async () => {
@@ -189,10 +217,9 @@ function limparForm() {
   editandoId = null;
   $("tituloForm").textContent = "Novo Cliente";
   $("btnSalvar").textContent = "Salvar Cliente";
-  $("btnCancelar").classList.add("hidden");
 }
 
-window.cancelarEdicao = limparForm;
+window.cancelarEdicao = () => { limparForm(); location.hash = "clientes"; };
 
 window.salvarCliente = async () => {
   if (!$("nome").value.trim()) { alert("Informe o nome do cliente."); return; }
@@ -228,6 +255,7 @@ window.salvarCliente = async () => {
     if (novos.length) await updateDoc(doc(db, "clientes", id), { documentos: arrayUnion(...novos) });
     limparForm();
     alert("Cliente salvo");
+    location.hash = "clientes";
   } catch (e) {
     alert("Erro ao salvar: " + e.message);
   } finally {
@@ -244,8 +272,7 @@ window.editarCliente = id => {
   $("valor").value = c.valor; $("status").value = c.status; $("observacoes").value = c.observacoes || "";
   $("tituloForm").textContent = "Editar Cliente";
   $("btnSalvar").textContent = "Salvar alterações";
-  $("btnCancelar").classList.remove("hidden");
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  location.hash = "novo";
 };
 
 /* ===== Lista ===== */
