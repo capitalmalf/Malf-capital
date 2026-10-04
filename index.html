@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM Simples</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#f4f6f9;padding:20px}
+.container{background:#fff;padding:20px;border-radius:12px;margin-bottom:20px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+h1,h2,h3{margin-bottom:15px}
+input,select,textarea{width:100%;padding:10px;margin-bottom:10px;border:1px solid #ccc;border-radius:8px}
+button{background:#0078d4;color:#fff;border:none;padding:10px 15px;border-radius:8px;cursor:pointer}
+button:hover{background:#005ea6}
+button:disabled{opacity:.6;cursor:wait}
+button.sec{background:#6b7280}
+table{width:100%;border-collapse:collapse;margin-top:15px}
+table th{background:#0078d4;color:#fff}
+th,td{border:1px solid #ddd;padding:10px}
+.timeline-item{margin-bottom:10px;border-left:5px solid #0078d4;padding:10px;background:#f9f9f9;border-radius:8px}
+.timeline-whatsapp{border-left-color:#25D366}
+.timeline-ligacao{border-left-color:#0ea5e9}
+.timeline-email{border-left-color:#f97316}
+.timeline-presencial{border-left-color:#8b5cf6}
+.hidden{display:none}
+.card-resumo{background:#eff6ff;padding:15px;border-radius:10px;font-size:18px;font-weight:bold;color:#0078d4;margin-top:10px}
+.documento{background:#f5f5f5;padding:8px;margin-bottom:5px;border-radius:5px}
+.documento a{color:#0078d4;text-decoration:none}
+#login{max-width:380px;margin:60px auto}
+#erroLogin{color:#c00;margin-bottom:10px}
+.topo{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}
+.topo h1{margin:0}
+@media(max-width:768px){
+table,thead,tbody,th,td,tr{display:block}
+thead{display:none}
+tr{margin-bottom:15px;border:1px solid #ddd;border-radius:10px;background:#fff;padding:10px}
+td{border:none;padding:5px}
+button{width:100%;margin-top:5px}
+.topo button{width:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="container">
+  <h2>Entrar no CRM</h2>
+  <input id="loginEmail" type="email" placeholder="E-mail">
+  <input id="loginSenha" type="password" placeholder="Senha">
+  <div id="erroLogin"></div>
+  <button id="btnEntrar">Entrar</button>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <div class="topo">
+    <h1>CRM Simples</h1>
+    <button class="sec" id="btnSair">Sair</button>
+  </div>
+
+  <div class="container">
+    <h2 id="tituloForm">Novo Cliente</h2>
+    <input id="nome" placeholder="Nome Completo">
+    <input id="cpf" placeholder="CPF/CNPJ">
+    <input id="nascimento" type="date">
+    <input id="telefone" placeholder="Telefone">
+    <select id="whatsapp"><option>Sim</option><option>Não</option></select>
+    <input id="email" placeholder="E-mail">
+    <input id="valor" type="number" placeholder="Valor Negociado">
+    <select id="status">
+      <option>Em negociação</option><option>Fechado</option>
+      <option>Em acompanhamento</option><option>Encerrado</option>
+    </select>
+    <textarea id="observacoes" placeholder="Observações gerais"></textarea>
+    <label>Documentos</label>
+    <input id="documentos" type="file" multiple>
+    <button id="btnSalvar" onclick="salvarCliente()">Salvar Cliente</button>
+    <button class="sec hidden" id="btnCancelar" onclick="cancelarEdicao()">Cancelar edição</button>
+  </div>
+
+  <div class="container">
+    <h2>Clientes</h2>
+    <input id="busca" placeholder="Buscar cliente..." oninput="renderizarClientes()">
+    <select id="filtroStatus" onchange="renderizarClientes()">
+      <option value="">Todos os status</option>
+      <option>Em negociação</option><option>Fechado</option>
+      <option>Em acompanhamento</option><option>Encerrado</option>
+    </select>
+    <button onclick="alternarOrdem()" id="btnOrdem">Ordenar por Maior Valor</button>
+    <div class="card-resumo">Total Negociado: R$ <span id="valorTotal">0,00</span></div>
+    <table>
+      <thead><tr>
+        <th>Cliente</th><th>CPF/CNPJ</th><th>Telefone</th><th>WhatsApp</th>
+        <th>Valor</th><th>Status</th><th>Último Contato</th><th>Ações</th>
+      </tr></thead>
+      <tbody id="listaClientes"></tbody>
+    </table>
+  </div>
+
+  <div id="detalhesCliente" class="container hidden"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
+  arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+/* ===== 1) COLE AQUI A CONFIG DO SEU PROJETO (Console Firebase > Configurações > Seus apps) ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyAg22U5g9yIMchfUx3M6KwjCHmbE5Fjzus",
+  authDomain: "malf-capital.firebaseapp.com",
+  projectId: "malf-capital",
+  storageBucket: "malf-capital.firebasestorage.app",
+  messagingSenderId: "487992305267",
+  appId: "1:487992305267:web:5a11019533974c0276ec06",
+  measurementId: "G-0DG163YS2E"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+const col = collection(db, "clientes");
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const brl = n => Number(n || 0).toLocaleString("pt-BR", {style:"currency", currency:"BRL"});
+
+let clientes = [];
+let clienteAtualId = null;
+let editandoId = null;
+let ordemValor = false;
+let unsub = null;
+
+/* ===== Autenticação ===== */
+$("btnEntrar").onclick = async () => {
+  $("erroLogin").textContent = "";
+  try {
+    await signInWithEmailAndPassword(auth, $("loginEmail").value.trim(), $("loginSenha").value);
+  } catch (e) {
+    $("erroLogin").textContent = "E-mail ou senha incorretos.";
+  }
+};
+$("loginSenha").addEventListener("keydown", e => { if (e.key === "Enter") $("btnEntrar").click(); });
+$("btnSair").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, user => {
+  $("login").classList.toggle("hidden", !!user);
+  $("app").classList.toggle("hidden", !user);
+  if (unsub) { unsub(); unsub = null; }
+  if (user) {
+    unsub = onSnapshot(col, snap => {
+      clientes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderizarClientes();
+      if (clienteAtualId) abrirCliente(clienteAtualId, true);
+    }, err => alert("Erro ao carregar clientes: " + err.message));
+  } else {
+    clientes = []; clienteAtualId = null;
+  }
+});
+
+/* ===== Máscaras ===== */
+$("cpf").addEventListener("input", function () {
+  let v = this.value.replace(/\D/g, "").slice(0, 14);
+  if (v.length <= 11) {
+    v = v.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  } else {
+    v = v.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+         .replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2");
+  }
+  this.value = v;
+});
+$("telefone").addEventListener("input", function () {
+  let v = this.value.replace(/\D/g, "").slice(0, 11);
+  v = v.replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d)(\d{4})$/, "$1-$2");
+  this.value = v;
+});
+
+/* ===== Cadastro / edição ===== */
+function limparForm() {
+  ["nome","cpf","nascimento","telefone","email","valor","observacoes","documentos"].forEach(i => $(i).value = "");
+  $("whatsapp").selectedIndex = 0;
+  $("status").selectedIndex = 0;
+  editandoId = null;
+  $("tituloForm").textContent = "Novo Cliente";
+  $("btnSalvar").textContent = "Salvar Cliente";
+  $("btnCancelar").classList.add("hidden");
+}
+
+window.cancelarEdicao = limparForm;
+
+window.salvarCliente = async () => {
+  if (!$("nome").value.trim()) { alert("Informe o nome do cliente."); return; }
+  const btn = $("btnSalvar");
+  btn.disabled = true;
+  try {
+    const dados = {
+      nome: $("nome").value.trim(),
+      cpf: $("cpf").value,
+      nascimento: $("nascimento").value,
+      telefone: $("telefone").value,
+      whatsapp: $("whatsapp").value,
+      email: $("email").value.trim(),
+      valor: Number($("valor").value) || 0,
+      status: $("status").value,
+      observacoes: $("observacoes").value
+    };
+    let id = editandoId;
+    if (id) {
+      await updateDoc(doc(db, "clientes", id), dados);
+    } else {
+      const novo = await addDoc(col, { ...dados, documentos: [], timeline: [], criadoEm: serverTimestamp() });
+      id = novo.id;
+    }
+    // Upload dos documentos para o Storage
+    const novos = [];
+    for (const file of $("documentos").files) {
+      const path = `clientes/${id}/${Date.now()}_${file.name}`;
+      const r = ref(storage, path);
+      await uploadBytes(r, file);
+      novos.push({ nome: file.name, path, url: await getDownloadURL(r) });
+    }
+    if (novos.length) await updateDoc(doc(db, "clientes", id), { documentos: arrayUnion(...novos) });
+    limparForm();
+    alert("Cliente salvo");
+  } catch (e) {
+    alert("Erro ao salvar: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+window.editarCliente = id => {
+  const c = clientes.find(x => x.id === id);
+  if (!c) return;
+  editandoId = id;
+  $("nome").value = c.nome; $("cpf").value = c.cpf; $("nascimento").value = c.nascimento || "";
+  $("telefone").value = c.telefone; $("whatsapp").value = c.whatsapp; $("email").value = c.email;
+  $("valor").value = c.valor; $("status").value = c.status; $("observacoes").value = c.observacoes || "";
+  $("tituloForm").textContent = "Editar Cliente";
+  $("btnSalvar").textContent = "Salvar alterações";
+  $("btnCancelar").classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+/* ===== Lista ===== */
+window.renderizarClientes = () => {
+  const texto = $("busca").value.toLowerCase();
+  const filtro = $("filtroStatus").value;
+  let lista = clientes.filter(c =>
+    (c.nome.toLowerCase().includes(texto) || (c.cpf || "").includes(texto) || (c.telefone || "").includes(texto))
+    && (!filtro || c.status === filtro));
+  lista.sort((a, b) => ordemValor ? b.valor - a.valor : a.nome.localeCompare(b.nome, "pt-BR"));
+
+  let total = 0;
+  $("listaClientes").innerHTML = lista.map(c => {
+    total += Number(c.valor);
+    const t = c.timeline || [];
+    const ultimo = t.length ? `${t[t.length - 1].data} ${t[t.length - 1].hora}` : "-";
+    return `<tr>
+      <td>${esc(c.nome)}</td><td>${esc(c.cpf)}</td><td>${esc(c.telefone)}</td>
+      <td>${c.whatsapp === "Sim" ? "✅" : "❌"}</td>
+      <td>${brl(c.valor)}</td><td>${esc(c.status)}</td><td>${esc(ultimo)}</td>
+      <td>
+        <button onclick="abrirCliente('${c.id}')">Abrir</button>
+        <button class="sec" onclick="editarCliente('${c.id}')">Editar</button>
+        <button onclick="excluirCliente('${c.id}')">Excluir</button>
+      </td></tr>`;
+  }).join("");
+  $("valorTotal").textContent = total.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+};
+
+window.alternarOrdem = () => {
+  ordemValor = !ordemValor;
+  $("btnOrdem").textContent = ordemValor ? "Ordenar por Nome" : "Ordenar por Maior Valor";
+  renderizarClientes();
+};
+
+window.excluirCliente = async id => {
+  if (!confirm("Excluir cliente?")) return;
+  try {
+    const c = clientes.find(x => x.id === id);
+    for (const d of (c?.documentos || [])) {
+      try { await deleteObject(ref(storage, d.path)); } catch (_) {}
+    }
+    await deleteDoc(doc(db, "clientes", id));
+    if (clienteAtualId === id) { clienteAtualId = null; $("detalhesCliente").classList.add("hidden"); }
+  } catch (e) { alert("Erro ao excluir: " + e.message); }
+};
+
+/* ===== Detalhes e linha do tempo ===== */
+window.abrirCliente = (id, manterRascunho) => {
+  const c = clientes.find(x => x.id === id);
+  const div = $("detalhesCliente");
+  if (!c) { div.classList.add("hidden"); return; }
+  clienteAtualId = id;
+
+  // Atualização em tempo real: só redesenha a timeline se o painel já estiver aberto
+  if (manterRascunho && $("timelineArea")) { renderizarTimeline(c); return; }
+
+  div.classList.remove("hidden");
+  const docs = (c.documentos || []).map(d =>
+    `<div class="documento">📄 <a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.nome)}</a></div>`).join("");
+
+  div.innerHTML = `
+    <h2>${esc(c.nome)}</h2>
+    <p><b>CPF/CNPJ:</b> ${esc(c.cpf)}</p>
+    <p><b>Nascimento:</b> ${c.nascimento ? new Date(c.nascimento + "T00:00").toLocaleDateString("pt-BR") : "-"}</p>
+    <p><b>Telefone:</b> ${esc(c.telefone)}</p>
+    <p><b>E-mail:</b> ${esc(c.email)}</p>
+    <p><b>Status:</b> ${esc(c.status)}</p>
+    <p><b>Valor:</b> ${brl(c.valor)}</p>
+    <p><b>Observações:</b> ${esc(c.observacoes) || "-"}</p>
+    <h3>Documentos</h3>${docs || "Nenhum documento"}
+    <hr><h3>Linha do Tempo</h3>
+    <div id="timelineArea"></div>
+    <select id="tipoInteracao">
+      <option value="whatsapp">WhatsApp</option><option value="ligacao">Ligação</option>
+      <option value="email">E-mail</option><option value="presencial">Presencial</option>
+    </select>
+    <input id="responsavel" placeholder="Responsável">
+    <textarea id="novoComentario" placeholder="Adicionar comentário"></textarea>
+    <button onclick="adicionarComentario()">Adicionar à Linha do Tempo</button>`;
+  renderizarTimeline(c);
+};
+
+window.adicionarComentario = async () => {
+  const texto = $("novoComentario").value.trim();
+  if (!texto || !clienteAtualId) return;
+  const agora = new Date();
+  try {
+    await updateDoc(doc(db, "clientes", clienteAtualId), {
+      timeline: arrayUnion({
+        tipo: $("tipoInteracao").value,
+        responsavel: $("responsavel").value,
+        comentario: texto,
+        data: agora.toLocaleDateString("pt-BR"),
+        hora: agora.toLocaleTimeString("pt-BR")
+      })
+    });
+    $("novoComentario").value = "";
+  } catch (e) { alert("Erro ao salvar comentário: " + e.message); }
+};
+
+function renderizarTimeline(c) {
+  const area = $("timelineArea");
+  if (!area) return;
+  area.innerHTML = (c.timeline || []).slice().reverse().map(i => `
+    <div class="timeline-item timeline-${esc(i.tipo)}">
+      <b>${esc(i.data)} ${esc(i.hora)} - ${esc(i.responsavel)}</b><br><br>${esc(i.comentario)}
+    </div>`).join("") || "Nenhuma interação registrada.";
+}
+</script>
+</body>
+</html>
