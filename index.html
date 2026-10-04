@@ -55,6 +55,33 @@ th,td{border:1px solid #ddd;padding:10px}
 td .link-btn{margin-right:4px}
 @media(max-width:768px){td .link-btn{display:block;margin:5px 0 0}}
 @media(max-width:768px){.link-btn{flex:1 1 100%}}
+.filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+.filtros input{flex:2 1 260px;margin:0}
+.filtros select{flex:1 1 180px;margin:0}
+.so-mobile{display:none}
+.resumo{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px}
+.res{background:#fff;border-radius:12px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.08);cursor:pointer;border:2px solid transparent}
+.res.ativo{border-color:#0078d4}
+.res small{color:#6b7280;display:block;margin-bottom:4px}
+.res b{font-size:20px;display:block;color:#0078d4}
+.res span{font-size:13px;color:#374151}
+.alerta{background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:12px 15px;border-radius:10px;margin-bottom:20px}
+.alerta a{color:#9a3412;font-weight:bold}
+th.ord{cursor:pointer;user-select:none}
+.linha{cursor:pointer}
+.linha:hover{background:#f5f9ff}
+.nome-link{color:#111;font-weight:bold;text-decoration:none}
+.sub{font-size:12px;color:#6b7280}
+.atraso{color:#c2410c;font-weight:bold}
+.muito{color:#b91c1c;font-weight:bold}
+.icone{padding:8px 11px;margin:0}
+.perigo{background:#dc2626}
+.perigo:hover{background:#b91c1c}
+td.acoes{white-space:nowrap}
+td.acoes .perigo{margin-left:18px}
+#contagem{margin:12px 0 0}
+#btnMais{margin-top:15px}
+@media(max-width:768px){.icone{width:auto}.so-mobile{display:block}.filtros button{width:100%}}
 .menu{display:flex;gap:8px;margin-bottom:20px}
 .menu button{background:#fff;color:#0078d4;border:1px solid #0078d4}
 .menu button.ativo{background:#0078d4;color:#fff}
@@ -97,6 +124,7 @@ button{width:100%;margin-top:5px}
     <h2 id="tituloForm">Novo Cliente</h2>
     <input id="nome" placeholder="Nome Completo">
     <input id="cpf" placeholder="CPF/CNPJ">
+    <label>Data de nascimento</label>
     <input id="nascimento" type="date">
     <input id="telefone" placeholder="Telefone">
     <select id="whatsapp"><option>Sim</option><option>Não</option></select>
@@ -106,6 +134,8 @@ button{width:100%;margin-top:5px}
       <option>Em negociação</option><option>Fechado</option>
       <option>Em acompanhamento</option><option>Encerrado</option>
     </select>
+    <label>Próximo contato (retorno)</label>
+    <input id="proximoContato" type="date">
     <textarea id="observacoes" placeholder="Observações gerais"></textarea>
     <label>Documentos</label>
     <input id="documentos" type="file" multiple>
@@ -116,25 +146,37 @@ button{width:100%;margin-top:5px}
 
   <!-- PÁGINA: CLIENTES -->
   <div id="paginaClientes">
+  <div id="alertaRetorno" class="alerta hidden"></div>
+  <div class="resumo" id="resumo"></div>
   <div class="container">
-    <h2>Clientes</h2>
-    <input id="busca" placeholder="Buscar cliente..." oninput="renderizarClientes()">
-    <select id="filtroStatus" onchange="renderizarClientes()">
-      <option value="">Todos os status</option>
-      <option>Em negociação</option><option>Fechado</option>
-      <option>Em acompanhamento</option><option>Encerrado</option>
-    </select>
-    <button onclick="alternarOrdem()" id="btnOrdem">Ordenar por Maior Valor</button>
-    <div class="card-resumo">Total Negociado: R$ <span id="valorTotal">0,00</span></div>
+    <div class="filtros">
+      <input id="busca" placeholder="Buscar por nome, CPF/CNPJ ou telefone..." oninput="resetPagina()">
+      <select id="filtroStatus" onchange="resetPagina()">
+        <option value="">Todos os status</option>
+        <option>Em negociação</option><option>Fechado</option>
+        <option>Em acompanhamento</option><option>Encerrado</option>
+      </select>
+      <select id="ordenacao" class="so-mobile" onchange="ordenarSel()">
+        <option value="nome">Ordenar: Nome</option><option value="valor">Ordenar: Maior valor</option>
+        <option value="ultimo">Ordenar: Sem contato há mais tempo</option><option value="retorno">Ordenar: Retorno</option>
+      </select>
+      <button class="sec" onclick="exportarCSV()">Exportar CSV</button>
+    </div>
+    <div id="contagem" class="vazio"></div>
     <table>
       <thead><tr>
-        <th>Cliente</th><th>CPF/CNPJ</th><th>Telefone</th><th>WhatsApp</th>
-        <th>Valor</th><th>Status</th><th>Último Contato</th><th>Ações</th>
+        <th class="ord" id="th-nome" onclick="ordenarPor('nome')">Cliente</th>
+        <th>Telefone</th>
+        <th class="ord" id="th-valor" onclick="ordenarPor('valor')">Valor</th>
+        <th class="ord" id="th-status" onclick="ordenarPor('status')">Status</th>
+        <th class="ord" id="th-ultimo" onclick="ordenarPor('ultimo')">Último contato</th>
+        <th class="ord" id="th-retorno" onclick="ordenarPor('retorno')">Retorno</th>
+        <th>Ações</th>
       </tr></thead>
       <tbody id="listaClientes"></tbody>
     </table>
+    <button class="sec hidden" id="btnMais" onclick="mostrarMais()">Mostrar mais</button>
   </div>
-
   </div>
 
   <!-- PÁGINA: DETALHES DO CLIENTE -->
@@ -250,7 +292,7 @@ $("telefone").addEventListener("input", function () {
 
 /* ===== Cadastro / edição ===== */
 function limparForm() {
-  ["nome","cpf","nascimento","telefone","email","valor","observacoes","documentos"].forEach(i => $(i).value = "");
+  ["nome","cpf","nascimento","telefone","email","valor","observacoes","documentos","proximoContato"].forEach(i => $(i).value = "");
   $("whatsapp").selectedIndex = 0;
   $("status").selectedIndex = 0;
   editandoId = null;
@@ -262,6 +304,12 @@ window.cancelarEdicao = () => { limparForm(); location.hash = "clientes"; };
 
 window.salvarCliente = async () => {
   if (!$("nome").value.trim()) { alert("Informe o nome do cliente."); return; }
+  const doc_ = soNum($("cpf").value), tel_ = soNum($("telefone").value), mail_ = $("email").value.trim();
+  if (doc_ && !(doc_.length === 11 ? cpfOk(doc_) : doc_.length === 14 ? cnpjOk(doc_) : false)) { alert("CPF/CNPJ inválido. Confira os números."); return; }
+  if (tel_ && ![10, 11].includes(tel_.length)) { alert("Telefone incompleto. Informe DDD + número."); return; }
+  if (mail_ && !/^\S+@\S+\.\S+$/.test(mail_)) { alert("E-mail inválido."); return; }
+  const dup = doc_ && clientes.find(c => c.id !== editandoId && soNum(c.cpf) === doc_);
+  if (dup && !confirm(`Já existe um cliente com este CPF/CNPJ: ${dup.nome}. Salvar mesmo assim?`)) return;
   const btn = $("btnSalvar");
   btn.disabled = true;
   try {
@@ -274,7 +322,8 @@ window.salvarCliente = async () => {
       email: $("email").value.trim(),
       valor: Number($("valor").value) || 0,
       status: $("status").value,
-      observacoes: $("observacoes").value
+      observacoes: $("observacoes").value,
+      proximoContato: $("proximoContato").value
     };
     let id = editandoId;
     if (id) {
@@ -308,49 +357,153 @@ window.editarCliente = id => {
   editandoId = id;
   $("nome").value = c.nome; $("cpf").value = c.cpf; $("nascimento").value = c.nascimento || "";
   $("telefone").value = c.telefone; $("whatsapp").value = c.whatsapp; $("email").value = c.email;
-  $("valor").value = c.valor; $("status").value = c.status; $("observacoes").value = c.observacoes || "";
+  $("valor").value = c.valor; $("proximoContato").value = c.proximoContato || ""; $("status").value = c.status; $("observacoes").value = c.observacoes || "";
   $("tituloForm").textContent = "Editar Cliente";
   $("btnSalvar").textContent = "Salvar alterações";
   location.hash = "novo";
 };
 
 /* ===== Lista ===== */
-window.renderizarClientes = () => {
-  const texto = $("busca").value.toLowerCase();
-  const filtro = $("filtroStatus").value;
-  let lista = clientes.filter(c =>
-    (c.nome.toLowerCase().includes(texto) || (c.cpf || "").includes(texto) || (c.telefone || "").includes(texto))
-    && (!filtro || c.status === filtro));
-  lista.sort((a, b) => ordemValor ? b.valor - a.valor : a.nome.localeCompare(b.nome, "pt-BR"));
+/* ===== Utilidades ===== */
+const soNum = v => (v || "").replace(/\D/g, "");
+const ATIVOS = ["Em negociação", "Em acompanhamento"];
+const STATUS = ["Em negociação", "Fechado", "Em acompanhamento", "Encerrado"];
+const z = x => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+const diasDesde = d => Math.round((z(new Date()) - z(d)) / 864e5);
+const fmtData = iso => iso ? new Date(iso + "T00:00").toLocaleDateString("pt-BR") : "";
+const dataRetorno = c => new Date(c.proximoContato + "T00:00");
 
-  let total = 0;
-  $("listaClientes").innerHTML = lista.map(c => {
-    total += Number(c.valor);
-    const t = c.timeline || [];
-    const ultimo = t.length ? `${t[t.length - 1].data} ${t[t.length - 1].hora}` : "-";
-    return `<tr>
-      <td>${esc(c.nome)}</td><td>${esc(c.cpf)}</td><td>${esc(c.telefone)}</td>
-      <td>${c.whatsapp === "Sim" ? "✅" : "❌"}</td>
-      <td>${brl(c.valor)}</td><td>${badge(c.status)}</td><td>${esc(ultimo)}</td>
-      <td>
-        <a class="link-btn" href="#cliente/${c.id}">Abrir</a>
-        <button class="sec" onclick="editarCliente('${c.id}')">Editar</button>
-        <button onclick="excluirCliente('${c.id}')">Excluir</button>
-      </td></tr>`;
-  }).join("");
-  $("valorTotal").textContent = total.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+function relativo(d) {
+  if (d <= 0) return "hoje";
+  if (d === 1) return "ontem";
+  if (d < 30) return `há ${d} dias`;
+  if (d < 365) { const m = Math.floor(d / 30); return `há ${m} ${m === 1 ? "mês" : "meses"}`; }
+  const a = Math.floor(d / 365); return `há ${a} ${a === 1 ? "ano" : "anos"}`;
+}
+function ultimoContato(c) {
+  const t = c.timeline || [];
+  if (!t.length) return null;
+  const i = t[t.length - 1];
+  const [d, m, y] = (i.data || "").split("/");
+  const [H = 0, M = 0, S = 0] = (i.hora || "").split(":");
+  return new Date(+y, m - 1, +d, +H, +M, +S);
+}
+
+function cpfOk(v) {
+  if (/^(\d)\1+$/.test(v)) return false;
+  let s = 0; for (let i = 0; i < 9; i++) s += +v[i] * (10 - i);
+  if ((s * 10) % 11 % 10 !== +v[9]) return false;
+  s = 0; for (let i = 0; i < 10; i++) s += +v[i] * (11 - i);
+  return (s * 10) % 11 % 10 === +v[10];
+}
+function cnpjOk(v) {
+  if (/^(\d)\1+$/.test(v)) return false;
+  const calc = n => { let p = n - 7, s = 0; for (let i = 0; i < n; i++) { s += +v[i] * p--; if (p < 2) p = 9; } const r = s % 11; return r < 2 ? 0 : 11 - r; };
+  return calc(12) === +v[12] && calc(13) === +v[13];
+}
+
+/* ===== Lista ===== */
+let ordem = { campo: "nome", dir: 1 };
+let limite = 50;
+const rotulos = { nome: "Cliente", valor: "Valor", status: "Status", ultimo: "Último contato", retorno: "Retorno" };
+const chaves = {
+  nome: c => c.nome.toLowerCase(), valor: c => c.valor, status: c => c.status,
+  ultimo: c => ultimoContato(c)?.getTime() ?? -1, retorno: c => c.proximoContato || "9999"
 };
 
-window.alternarOrdem = () => {
-  ordemValor = !ordemValor;
-  $("btnOrdem").textContent = ordemValor ? "Ordenar por Nome" : "Ordenar por Maior Valor";
+function filtrados() {
+  const t = $("busca").value.toLowerCase(), tn = soNum(t), f = $("filtroStatus").value;
+  return clientes.filter(c =>
+    (c.nome.toLowerCase().includes(t) || (c.cpf || "").includes(t) || (c.telefone || "").includes(t)
+      || (tn && (soNum(c.cpf).includes(tn) || soNum(c.telefone).includes(tn))))
+    && (!f || c.status === f))
+    .sort((a, b) => {
+      const x = chaves[ordem.campo](a), y = chaves[ordem.campo](b);
+      return (x > y ? 1 : x < y ? -1 : 0) * ordem.dir;
+    });
+}
+
+function renderizarClientes() {
+  // Cartões de resumo (clicáveis = filtro)
+  const f = $("filtroStatus").value;
+  const soma = l => l.reduce((t, c) => t + Number(c.valor), 0);
+  const cartao = (rot, lista, val) => `<div class="res ${f === val ? "ativo" : ""}" onclick="filtrarStatus('${val}')">
+    <small>${rot}</small><b>${lista.length}</b><span>${brl(soma(lista))}</span></div>`;
+  $("resumo").innerHTML = cartao("Todos", clientes, "") +
+    STATUS.map(st => cartao(st, clientes.filter(c => c.status === st), st)).join("");
+
+  // Aviso de retornos
+  const pend = clientes.filter(c => c.proximoContato && c.status !== "Encerrado" && diasDesde(dataRetorno(c)) >= 0)
+    .sort((a, b) => a.proximoContato.localeCompare(b.proximoContato));
+  $("alertaRetorno").classList.toggle("hidden", !pend.length);
+  $("alertaRetorno").innerHTML = `⚠️ ${pend.length} retorno${pend.length > 1 ? "s" : ""} para hoje ou atrasado${pend.length > 1 ? "s" : ""}: `
+    + pend.map(c => `<a href="#cliente/${c.id}">${esc(c.nome)}</a>`).join(", ");
+
+  // Cabeçalhos com seta
+  for (const k in rotulos)
+    $("th-" + k).textContent = rotulos[k] + (ordem.campo === k ? (ordem.dir === 1 ? " ▲" : " ▼") : "");
+  $("ordenacao").value = ordem.campo in chaves && $("ordenacao").querySelector(`[value="${ordem.campo}"]`) ? ordem.campo : "nome";
+
+  // Linhas
+  const lista = filtrados();
+  $("contagem").textContent = `${lista.length} cliente${lista.length === 1 ? "" : "s"} · Total negociado: ${brl(soma(lista))}`;
+  $("listaClientes").innerHTML = lista.slice(0, limite).map(c => {
+    const uc = ultimoContato(c);
+    let ultimo = '<span class="vazio">Sem contato</span>';
+    if (uc) {
+      const d = diasDesde(uc);
+      const cl = ATIVOS.includes(c.status) ? (d > 30 ? "muito" : d > 15 ? "atraso" : "") : "";
+      ultimo = `<span class="${cl}" title="${esc(uc.toLocaleString("pt-BR"))}">${relativo(d)}</span>`;
+    }
+    let ret = '<span class="vazio">-</span>';
+    if (c.proximoContato) {
+      const d = diasDesde(dataRetorno(c));
+      ret = d > 0 ? `<span class="muito">${fmtData(c.proximoContato)} (atrasado)</span>`
+          : d === 0 ? '<span class="atraso">Hoje</span>' : fmtData(c.proximoContato);
+    }
+    return `<tr class="linha" onclick="location.hash='cliente/${c.id}'">
+      <td><a class="nome-link" href="#cliente/${c.id}">${esc(c.nome)}</a><div class="sub">${esc(c.cpf) || "Sem CPF/CNPJ"}</div></td>
+      <td>${esc(c.telefone) || "-"} ${c.whatsapp === "Sim" && c.telefone ? "💬" : ""}</td>
+      <td>${brl(c.valor)}</td><td>${badge(c.status)}</td><td>${ultimo}</td><td>${ret}</td>
+      <td class="acoes">
+        <button class="icone sec" title="Editar" onclick="event.stopPropagation();editarCliente('${c.id}')">✏️</button>
+        <button class="icone perigo" title="Excluir" onclick="event.stopPropagation();excluirCliente('${c.id}')">🗑️</button>
+      </td></tr>`;
+  }).join("") || '<tr><td colspan="7" class="vazio">Nenhum cliente encontrado.</td></tr>';
+
+  const resto = lista.length - limite;
+  $("btnMais").classList.toggle("hidden", resto <= 0);
+  $("btnMais").textContent = `Mostrar mais (${resto} restantes)`;
+}
+
+window.resetPagina = () => { limite = 50; renderizarClientes(); };
+window.mostrarMais = () => { limite += 50; renderizarClientes(); };
+window.filtrarStatus = st => { $("filtroStatus").value = st; resetPagina(); };
+window.ordenarPor = campo => {
+  ordem = ordem.campo === campo ? { campo, dir: -ordem.dir } : { campo, dir: campo === "valor" ? -1 : 1 };
   renderizarClientes();
+};
+window.ordenarSel = () => { const c = $("ordenacao").value; ordem = { campo: c, dir: c === "valor" ? -1 : 1 }; renderizarClientes(); };
+
+window.exportarCSV = () => {
+  const q = v => { let t = String(v ?? ""); if (/^[=+\-@]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
+  const cab = ["Nome", "CPF/CNPJ", "Nascimento", "Telefone", "WhatsApp", "E-mail", "Valor", "Status", "Último contato", "Retorno", "Observações"];
+  const linhas = filtrados().map(c => {
+    const uc = ultimoContato(c);
+    return [c.nome, c.cpf, fmtData(c.nascimento), c.telefone, c.whatsapp, c.email, String(c.valor).replace(".", ","),
+      c.status, uc ? uc.toLocaleDateString("pt-BR") : "", fmtData(c.proximoContato), c.observacoes].map(q).join(";");
+  });
+  const blob = new Blob(["\ufeff" + [cab.map(q).join(";"), ...linhas].join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `clientes-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
 };
 
 window.excluirCliente = async id => {
-  if (!confirm("Excluir cliente?")) return;
+  const c = clientes.find(x => x.id === id);
+  if (!confirm(`Excluir "${c?.nome}"? Isso apaga também os documentos e o histórico.`)) return;
   try {
-    const c = clientes.find(x => x.id === id);
     for (const d of (c?.documentos || [])) {
       try { await deleteObject(ref(storage, d.path)); } catch (_) {}
     }
@@ -402,6 +555,7 @@ window.abrirCliente = (id, manterRascunho) => {
       ${campo("Telefone", esc(c.telefone) + (c.whatsapp === "Sim" ? " (WhatsApp)" : ""))}
       ${campo("E-mail", esc(c.email))}
       ${campo("Valor negociado", brl(c.valor), "valor")}
+      ${campo("Próximo contato", fmtData(c.proximoContato))}
     </div>
 
     ${c.observacoes ? `<div class="campo"><small>Observações</small><div class="obs">${esc(c.observacoes)}</div></div>` : ""}
