@@ -30,6 +30,29 @@ th,td{border:1px solid #ddd;padding:10px}
 #erroLogin{color:#c00;margin-bottom:10px}
 .topo{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}
 .topo h1{margin:0}
+.det-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.det-topo h2{margin:0 0 8px}
+.det-acoes{display:flex;gap:8px;flex-wrap:wrap}
+.badge{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:bold}
+.st-neg{background:#fef3c7;color:#92400e}
+.st-fechado{background:#dcfce7;color:#166534}
+.st-acomp{background:#dbeafe;color:#1e40af}
+.st-enc{background:#e5e7eb;color:#374151}
+.grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:20px}
+.campo small{display:block;color:#6b7280;font-size:12px;margin-bottom:3px}
+.campo span{font-size:16px;word-break:break-word}
+.campo.valor span{font-size:22px;font-weight:bold;color:#0078d4}
+.obs{background:#f9fafb;border-radius:8px;padding:12px;white-space:pre-wrap}
+.secao{margin-top:24px;padding-top:20px;border-top:1px solid #e5e7eb}
+.secao h3{margin-bottom:12px}
+.novo-comentario{background:#f9fafb;border-radius:10px;padding:15px;margin-bottom:20px}
+.novo-comentario button{margin-top:0}
+.timeline-item .meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;color:#6b7280;margin-bottom:6px}
+.timeline-item .tipo{font-weight:bold;color:#111}
+.vazio{color:#6b7280}
+.link-btn{display:inline-block;padding:10px 15px;border-radius:8px;background:#fff;color:#0078d4;border:1px solid #0078d4;text-decoration:none;font-size:14px;text-align:center}
+.documento a{display:block}
+@media(max-width:768px){.link-btn{flex:1 1 100%}}
 .menu{display:flex;gap:8px;margin-bottom:20px}
 .menu button{background:#fff;color:#0078d4;border:1px solid #0078d4}
 .menu button.ativo{background:#0078d4;color:#fff}
@@ -144,6 +167,10 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const brl = n => Number(n || 0).toLocaleString("pt-BR", {style:"currency", currency:"BRL"});
+
+const classeStatus = {"Em negociação":"st-neg","Fechado":"st-fechado","Em acompanhamento":"st-acomp","Encerrado":"st-enc"};
+const badge = st => `<span class="badge ${classeStatus[st] || "st-enc"}">${esc(st)}</span>`;
+const tipos = {whatsapp:"💬 WhatsApp", ligacao:"📞 Ligação", email:"✉️ E-mail", presencial:"🤝 Presencial"};
 
 let clientes = [];
 let clienteAtualId = null;
@@ -292,7 +319,7 @@ window.renderizarClientes = () => {
     return `<tr>
       <td>${esc(c.nome)}</td><td>${esc(c.cpf)}</td><td>${esc(c.telefone)}</td>
       <td>${c.whatsapp === "Sim" ? "✅" : "❌"}</td>
-      <td>${brl(c.valor)}</td><td>${esc(c.status)}</td><td>${esc(ultimo)}</td>
+      <td>${brl(c.valor)}</td><td>${badge(c.status)}</td><td>${esc(ultimo)}</td>
       <td>
         <button onclick="abrirCliente('${c.id}')">Abrir</button>
         <button class="sec" onclick="editarCliente('${c.id}')">Editar</button>
@@ -334,26 +361,62 @@ window.abrirCliente = (id, manterRascunho) => {
   const docs = (c.documentos || []).map(d =>
     `<div class="documento">📄 <a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.nome)}</a></div>`).join("");
 
+  const tel = (c.telefone || "").replace(/\D/g, "");
+  const links = [
+    c.whatsapp === "Sim" && tel ? `<a class="link-btn" href="https://wa.me/55${tel}" target="_blank" rel="noopener">💬 WhatsApp</a>` : "",
+    tel ? `<a class="link-btn" href="tel:+55${tel}">📞 Ligar</a>` : "",
+    c.email ? `<a class="link-btn" href="mailto:${esc(c.email)}">✉️ E-mail</a>` : ""
+  ].join("");
+  const campo = (rotulo, valor, extra = "") =>
+    `<div class="campo ${extra}"><small>${rotulo}</small><span>${valor || "-"}</span></div>`;
+
   div.innerHTML = `
-    <h2>${esc(c.nome)}</h2>
-    <p><b>CPF/CNPJ:</b> ${esc(c.cpf)}</p>
-    <p><b>Nascimento:</b> ${c.nascimento ? new Date(c.nascimento + "T00:00").toLocaleDateString("pt-BR") : "-"}</p>
-    <p><b>Telefone:</b> ${esc(c.telefone)}</p>
-    <p><b>E-mail:</b> ${esc(c.email)}</p>
-    <p><b>Status:</b> ${esc(c.status)}</p>
-    <p><b>Valor:</b> ${brl(c.valor)}</p>
-    <p><b>Observações:</b> ${esc(c.observacoes) || "-"}</p>
-    <h3>Documentos</h3>${docs || "Nenhum documento"}
-    <hr><h3>Linha do Tempo</h3>
-    <div id="timelineArea"></div>
-    <select id="tipoInteracao">
-      <option value="whatsapp">WhatsApp</option><option value="ligacao">Ligação</option>
-      <option value="email">E-mail</option><option value="presencial">Presencial</option>
-    </select>
-    <input id="responsavel" placeholder="Responsável">
-    <textarea id="novoComentario" placeholder="Adicionar comentário"></textarea>
-    <button onclick="adicionarComentario()">Adicionar à Linha do Tempo</button>`;
+    <div class="det-topo">
+      <div>
+        <h2>${esc(c.nome)}</h2>
+        ${badge(c.status)}
+      </div>
+      <div class="det-acoes">
+        ${links}
+        <button class="sec" onclick="editarCliente('${c.id}')">Editar</button>
+        <button class="sec" onclick="fecharCliente()">Fechar</button>
+      </div>
+    </div>
+
+    <div class="grade">
+      ${campo("CPF/CNPJ", esc(c.cpf))}
+      ${campo("Nascimento", c.nascimento ? new Date(c.nascimento + "T00:00").toLocaleDateString("pt-BR") : "")}
+      ${campo("Telefone", esc(c.telefone) + (c.whatsapp === "Sim" ? " (WhatsApp)" : ""))}
+      ${campo("E-mail", esc(c.email))}
+      ${campo("Valor negociado", brl(c.valor), "valor")}
+    </div>
+
+    ${c.observacoes ? `<div class="campo"><small>Observações</small><div class="obs">${esc(c.observacoes)}</div></div>` : ""}
+
+    <div class="secao">
+      <h3>Documentos</h3>
+      ${docs || '<p class="vazio">Nenhum documento anexado.</p>'}
+    </div>
+
+    <div class="secao">
+      <h3>Linha do Tempo</h3>
+      <div class="novo-comentario">
+        <select id="tipoInteracao">
+          <option value="whatsapp">WhatsApp</option><option value="ligacao">Ligação</option>
+          <option value="email">E-mail</option><option value="presencial">Presencial</option>
+        </select>
+        <input id="responsavel" placeholder="Responsável">
+        <textarea id="novoComentario" rows="3" placeholder="O que foi conversado?"></textarea>
+        <button onclick="adicionarComentario()">Adicionar à linha do tempo</button>
+      </div>
+      <div id="timelineArea"></div>
+    </div>`;
   renderizarTimeline(c);
+};
+
+window.fecharCliente = () => {
+  clienteAtualId = null;
+  $("detalhesCliente").classList.add("hidden");
 };
 
 window.adicionarComentario = async () => {
@@ -379,8 +442,12 @@ function renderizarTimeline(c) {
   if (!area) return;
   area.innerHTML = (c.timeline || []).slice().reverse().map(i => `
     <div class="timeline-item timeline-${esc(i.tipo)}">
-      <b>${esc(i.data)} ${esc(i.hora)} - ${esc(i.responsavel)}</b><br><br>${esc(i.comentario)}
-    </div>`).join("") || "Nenhuma interação registrada.";
+      <div class="meta">
+        <span><span class="tipo">${tipos[i.tipo] || esc(i.tipo)}</span>${i.responsavel ? " · " + esc(i.responsavel) : ""}</span>
+        <span>${esc(i.data)} às ${esc(i.hora)}</span>
+      </div>
+      ${esc(i.comentario)}
+    </div>`).join("") || '<p class="vazio">Nenhuma interação registrada.</p>';
 }
 </script>
 </body>
