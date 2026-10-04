@@ -82,6 +82,9 @@ td.acoes .perigo{margin-left:18px}
 #contagem{margin:12px 0 0}
 #btnMais{margin-top:15px}
 @media(max-width:768px){.icone{width:auto}.so-mobile{display:block}.filtros button{width:100%}}
+#cnpjInfo,#dicaReceita{margin:-4px 0 12px}
+#cnpjInfo:empty,#dicaReceita:empty{display:none}
+#dicaReceita{background:#eff6ff;color:#1e40af;padding:10px 12px;border-radius:8px;font-size:13px;margin:0 0 18px}
 .menu{display:flex;gap:8px;margin-bottom:20px}
 .menu button{background:#fff;color:#0078d4;border:1px solid #0078d4}
 .menu button.ativo{background:#0078d4;color:#fff}
@@ -124,6 +127,7 @@ button{width:100%;margin-top:5px}
     <h2 id="tituloForm">Novo Cliente</h2>
     <input id="nome" placeholder="Nome Completo">
     <input id="cpf" placeholder="CPF/CNPJ">
+    <div id="cnpjInfo" class="sub"></div>
     <label>Data de nascimento</label>
     <input id="nascimento" type="date">
     <input id="telefone" placeholder="Telefone">
@@ -223,6 +227,7 @@ const tipos = {whatsapp:"💬 WhatsApp", ligacao:"📞 Ligação", email:"✉️
 let clientes = [];
 let clienteAtualId = null;
 let carregado = false;
+let ultimaConsulta = null;
 let editandoId = null;
 let ordemValor = false;
 let unsub = null;
@@ -296,6 +301,8 @@ function limparForm() {
   $("whatsapp").selectedIndex = 0;
   $("status").selectedIndex = 0;
   editandoId = null;
+  ultimaConsulta = null;
+  $("cnpjInfo").textContent = "";
   $("tituloForm").textContent = "Novo Cliente";
   $("btnSalvar").textContent = "Salvar Cliente";
 }
@@ -325,6 +332,10 @@ window.salvarCliente = async () => {
       observacoes: $("observacoes").value,
       proximoContato: $("proximoContato").value
     };
+    if (ultimaConsulta && ultimaConsulta.cnpj === doc_) {
+      dados.situacaoReceita = ultimaConsulta.situacao;
+      dados.situacaoReceitaEm = hojeISO();
+    }
     let id = editandoId;
     if (id) {
       await updateDoc(doc(db, "clientes", id), dados);
@@ -522,10 +533,8 @@ window.abrirCliente = (id, manterRascunho) => {
   }
 
   // Atualização em tempo real: só redesenha a timeline se o painel já estiver aberto
-  if (manterRascunho && $("timelineArea")) { renderizarTimeline(c); return; }
+  if (manterRascunho && $("timelineArea")) { renderizarTimeline(c); renderizarDocs(c); return; }
 
-  const docs = (c.documentos || []).map(d =>
-    `<div class="documento">📄 <a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.nome)}</a></div>`).join("");
 
   const tel = (c.telefone || "").replace(/\D/g, "");
   const links = [
@@ -533,6 +542,10 @@ window.abrirCliente = (id, manterRascunho) => {
     tel ? `<a class="link-btn" href="tel:+55${tel}">📞 Ligar</a>` : "",
     c.email ? `<a class="link-btn" href="mailto:${esc(c.email)}">✉️ E-mail</a>` : ""
   ].join("");
+  const dg = soNum(c.cpf);
+  const botaoReceita = dg.length === 11
+    ? `<button class="sec" onclick="consultarCPF('${c.id}')">Consultar CPF na Receita</button>`
+    : dg.length === 14 ? `<button class="sec" onclick="atualizarSituacaoCNPJ('${c.id}')">Atualizar situação na Receita</button>` : "";
   const campo = (rotulo, valor, extra = "") =>
     `<div class="campo ${extra}"><small>${rotulo}</small><span>${valor || "-"}</span></div>`;
 
@@ -544,10 +557,12 @@ window.abrirCliente = (id, manterRascunho) => {
       </div>
       <div class="det-acoes">
         ${links}
+        ${botaoReceita}
         <button class="sec" onclick="editarCliente('${c.id}')">Editar</button>
         <button class="sec" onclick="fecharCliente()">← Voltar</button>
       </div>
     </div>
+    <p id="dicaReceita"></p>
 
     <div class="grade">
       ${campo("CPF/CNPJ", esc(c.cpf))}
@@ -556,13 +571,19 @@ window.abrirCliente = (id, manterRascunho) => {
       ${campo("E-mail", esc(c.email))}
       ${campo("Valor negociado", brl(c.valor), "valor")}
       ${campo("Próximo contato", fmtData(c.proximoContato))}
+      ${c.situacaoReceita ? campo("Situação na Receita", esc(c.situacaoReceita) + " · consultado em " + fmtData(c.situacaoReceitaEm)) : ""}
     </div>
 
     ${c.observacoes ? `<div class="campo"><small>Observações</small><div class="obs">${esc(c.observacoes)}</div></div>` : ""}
 
     <div class="secao">
       <h3>Documentos</h3>
-      ${docs || '<p class="vazio">Nenhum documento anexado.</p>'}
+      <div id="docsArea"></div>
+      <div class="novo-comentario">
+        <label>Anexar documento (ex.: comprovante de situação cadastral em PDF)</label>
+        <input id="novoDoc" type="file" multiple>
+        <button id="btnAnexar" onclick="anexarDocumentos('${c.id}')">Anexar</button>
+      </div>
     </div>
 
     <div class="secao">
@@ -579,6 +600,7 @@ window.abrirCliente = (id, manterRascunho) => {
       <div id="timelineArea"></div>
     </div>`;
   renderizarTimeline(c);
+  renderizarDocs(c);
 };
 
 window.fecharCliente = () => { location.hash = "clientes"; };
@@ -600,6 +622,97 @@ window.adicionarComentario = async () => {
     $("novoComentario").value = "";
   } catch (e) { alert("Erro ao salvar comentário: " + e.message); }
 };
+
+/* ===== Receita: CNPJ (automático) e CPF (semi-automático) ===== */
+const hojeISO = () => new Date().toLocaleDateString("sv-SE");
+
+async function consultaCNPJ(cnpj) {
+  const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+async function buscarCNPJ(cnpj) {
+  const info = $("cnpjInfo");
+  info.className = "sub";
+  info.textContent = "Consultando a Receita...";
+  try {
+    const d = await consultaCNPJ(cnpj);
+    if (soNum($("cpf").value) !== cnpj) return; // usuário já mudou o campo
+    if (!d) { info.className = "sub muito"; info.textContent = "CNPJ não encontrado na base da Receita."; return; }
+    if (!$("nome").value.trim()) $("nome").value = d.razao_social || "";
+    if (!$("telefone").value && d.ddd_telefone_1) {
+      $("telefone").value = d.ddd_telefone_1;
+      $("telefone").dispatchEvent(new Event("input"));
+    }
+    if (!$("email").value && d.email) $("email").value = String(d.email).toLowerCase();
+    ultimaConsulta = { cnpj, situacao: d.descricao_situacao_cadastral || "" };
+    info.className = ultimaConsulta.situacao === "ATIVA" ? "sub" : "sub muito";
+    info.textContent = `${d.razao_social}${d.nome_fantasia ? " (" + d.nome_fantasia + ")" : ""} · Situação: ${ultimaConsulta.situacao}`;
+  } catch (e) {
+    info.className = "sub";
+    info.textContent = "Não foi possível consultar agora. Preencha manualmente.";
+  }
+}
+
+$("cpf").addEventListener("input", function () {
+  const d = soNum(this.value), info = $("cnpjInfo");
+  ultimaConsulta = ultimaConsulta && ultimaConsulta.cnpj === d ? ultimaConsulta : null;
+  if (d.length === 14) {
+    if (!cnpjOk(d)) { info.className = "sub muito"; info.textContent = "CNPJ inválido."; }
+    else if (!ultimaConsulta) buscarCNPJ(d);
+  } else if (d.length === 11 && !cpfOk(d)) {
+    info.className = "sub muito"; info.textContent = "CPF inválido.";
+  } else { info.textContent = ""; }
+});
+
+window.atualizarSituacaoCNPJ = async id => {
+  const c = clientes.find(x => x.id === id);
+  const dica = $("dicaReceita");
+  try {
+    dica.textContent = "Consultando a Receita...";
+    const d = await consultaCNPJ(soNum(c.cpf));
+    if (!d) { dica.textContent = "CNPJ não encontrado na base da Receita."; return; }
+    await updateDoc(doc(db, "clientes", id), { situacaoReceita: d.descricao_situacao_cadastral || "", situacaoReceitaEm: hojeISO() });
+    dica.textContent = `Situação atualizada: ${d.descricao_situacao_cadastral}.`;
+  } catch (e) { dica.textContent = "Não foi possível consultar agora. Tente novamente mais tarde."; }
+};
+
+window.consultarCPF = id => {
+  const c = clientes.find(x => x.id === id);
+  if (!c) return;
+  window.open("https://servicos.receita.fazenda.gov.br/servicos/cpf/consultasituacao/consultapublica.asp", "_blank", "noopener");
+  if (navigator.clipboard) navigator.clipboard.writeText(c.cpf).catch(() => {});
+  $("dicaReceita").textContent = `CPF ${c.cpf} copiado. Na página da Receita, cole o CPF, informe a data de nascimento (${fmtData(c.nascimento) || "não cadastrada"}), resolva o CAPTCHA e salve o comprovante em PDF. Depois anexe o arquivo aqui embaixo, em Documentos.`;
+};
+
+window.anexarDocumentos = async id => {
+  const files = $("novoDoc").files;
+  if (!files.length) { alert("Escolha um arquivo para anexar."); return; }
+  const btn = $("btnAnexar");
+  btn.disabled = true;
+  try {
+    const novos = [];
+    for (const file of files) {
+      const path = `clientes/${id}/${Date.now()}_${file.name}`;
+      const r = ref(storage, path);
+      await uploadBytes(r, file);
+      novos.push({ nome: file.name, path, url: await getDownloadURL(r) });
+    }
+    await updateDoc(doc(db, "clientes", id), { documentos: arrayUnion(...novos) });
+    $("novoDoc").value = "";
+  } catch (e) { alert("Erro ao anexar: " + e.message); }
+  finally { btn.disabled = false; }
+};
+
+function renderizarDocs(c) {
+  const area = $("docsArea");
+  if (!area) return;
+  area.innerHTML = (c.documentos || []).map(d =>
+    `<div class="documento">📄 <a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.nome)}</a></div>`).join("")
+    || '<p class="vazio">Nenhum documento anexado.</p>';
+}
 
 function renderizarTimeline(c) {
   const area = $("timelineArea");
